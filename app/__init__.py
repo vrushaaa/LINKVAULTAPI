@@ -20,6 +20,12 @@ def create_app():
 
     # importing models to register with SQLAlchemy
     from app.models.bookmark import Bookmark  
-    from app.models.tag import Tag          
+    from app.models.tag import Tag      
+
+    from app.routes.bookmark_routes import bp as bookmarks_bp
+    from app.routes.bookmark_routes import short_bp
+
+    app.register_blueprint(bookmarks_bp, url_prefix='/api')
+    app.register_blueprint(short_bp)  # Root level
 
     return app
