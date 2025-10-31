@@ -154,17 +154,94 @@ def list_bookmarks():
         }
     }),200
 
-# display bookmark by id
+# display bookmark by id if exists
+@bp.route('/bookmarks/<int:bookmark_id>', methods=['GET'])
+def get_bookmark(bookmark_id):
+    bookmark = Bookmark.query.get(bookmark_id)
+
+    if not bookmark:
+        return jsonify({'error': 'Bookmark not found'}), 404
+
+    created_ist = bookmark.created_at.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone('Asia/Kolkata'))
+
+    return jsonify({
+        'id': bookmark.id,
+        'url': bookmark.url,
+        'short_url': bookmark.short_url,
+        'full_short_url': url_for('short.redirect_short', short_code=bookmark.short_url, _external=True),
+        'title': bookmark.title,
+        'notes': bookmark.notes,
+        'archived': bookmark.archived,
+        'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
+        'tags': [t.name for t in bookmark.tags]
+    }), 200
 
 
 # update bookmark
+@bp.route('/bookmarks/<int:bookmark_id>', methods=['PUT'])
+def update_bookmark(bookmark_id):
+    bookmark = Bookmark.query.get_or_404(bookmark_id)
+    data = request.get_json() or {}
 
+    if 'title' in data:
+        bookmark.title = data['title']
+    if 'notes' in data:
+        bookmark.notes = data['notes']
+    if 'archived' in data:
+        bookmark.archived = data['archived']
+    if 'tags' in data:
+        bookmark.tags = []
+        for tag_name in data['tags']:
+            tag_name = tag_name.strip().lower()
+            if tag_name:
+                tag = Tag.query.filter_by(name=tag_name).first()
+                if not tag:
+                    tag = Tag(name=tag_name)
+                    db.session.add(tag)
+                bookmark.tags.append(tag)
+
+    db.session.commit()
+
+    return jsonify({
+        'message': 'Bookmark updated',
+        'bookmark': {
+            'id': bookmark.id,
+            'url': bookmark.url,
+            'short_url': bookmark.short_url,
+            'full_short_url': url_for('short.redirect_short', short_code=bookmark.short_url, _external=True),
+            'title': bookmark.title,
+            'notes': bookmark.notes,
+            'archived': bookmark.archived,
+            'tags': [t.name for t in bookmark.tags]
+        }
+    }), 200
 
 # delete Bookmark using id
+@bp.route('/bookmarks/<int:bookmark_id>', methods=['DELETE'])
+def delete_bookmark(bookmark_id):
+    bookmark = Bookmark.query.get_or_404(bookmark_id)
+    db.session.delete(bookmark)
+    db.session.commit()
+    return jsonify({'message': 'Bookmark deleted'}), 200
 
 
 # toggle archive status
+@bp.route('/bookmarks/<int:bookmark_id>/archive', methods=['PATCH'])
+def toggle_archive(bookmark_id):
+    bookmark = Bookmark.query.get_or_404(bookmark_id)
+    bookmark.archived = not bookmark.archived
+    db.session.commit()
 
+    return jsonify({
+        'message': 'Archive status toggled',
+        'bookmark': {
+            'id': bookmark.id,
+            'url': bookmark.url,
+            'short_url': bookmark.short_url,
+            'full_short_url': url_for('short.redirect_short', short_code=bookmark.short_url, _external=True),
+            'archived': bookmark.archived
+        }
+    }), 200
 
 # # url-shortner
 @short_bp.route('/<short_code>')
@@ -173,3 +250,4 @@ def redirect_short(short_code):
     bookmark.updated_at = db.func.now()
     db.session.commit()
     return redirect(bookmark.url)
+
