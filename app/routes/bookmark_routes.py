@@ -1,4 +1,6 @@
-from flask import Blueprint, request, jsonify, url_for, redirect
+import os
+import tempfile
+from flask import Blueprint, current_app, request, jsonify, url_for, redirect
 from app import db
 from app.models.bookmark import Bookmark, generate_url_hash, normalize_url
 from app.models.tag import Tag
@@ -89,72 +91,72 @@ def create_bookmark():
         }
     }), 201
 
-# display all bookmarks
-@bp.route('/bookmarks', methods=['GET'])
-def list_bookmarks():
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 10, type=int)
-    tag = request.args.get('tag')
-    keyword = request.args.get('q')
-    archived = request.args.get('archived', type=lambda x: x.lower() == 'true')
+# # display all bookmarks
+# @bp.route('/bookmarks', methods=['GET'])
+# def list_bookmarks():
+#     page = request.args.get('page', 1, type=int)
+#     per_page = request.args.get('per_page', 10, type=int)
+#     tag = request.args.get('tag')
+#     keyword = request.args.get('q')
+#     archived = request.args.get('archived', type=lambda x: x.lower() == 'true')
 
-    query = Bookmark.query
+#     query = Bookmark.query
 
-    if tag:
-        query = query.join(Bookmark.tags).filter(Tag.name == tag.lower())
-    if keyword:
-        pattern = f"%{keyword}%"
-        query = query.filter(
-            db.or_(
-                Bookmark.url.ilike(pattern),
-                Bookmark.title.ilike(pattern),
-                Bookmark.notes.ilike(pattern)
-            )
-        )
-    if archived is not None:
-        query = query.filter(Bookmark.archived == archived)
+#     if tag:
+#         query = query.join(Bookmark.tags).filter(Tag.name == tag.lower())
+#     if keyword:
+#         pattern = f"%{keyword}%"
+#         query = query.filter(
+#             db.or_(
+#                 Bookmark.url.ilike(pattern),
+#                 Bookmark.title.ilike(pattern),
+#                 Bookmark.notes.ilike(pattern)
+#             )
+#         )
+#     if archived is not None:
+#         query = query.filter(Bookmark.archived == archived)
 
-    pagination = query.order_by(Bookmark.created_at.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
+#     pagination = query.order_by(Bookmark.created_at.desc()).paginate(
+#         page=page, per_page=per_page, error_out=False
+#     )
 
-    base_url = url_for('bookmarks_api.list_bookmarks', _external=True)
-    def abs_url(page_num):
-        return f"{base_url.split('?')[0]}?page={page_num}&per_page={per_page}" + \
-               (f"&tag={tag}" if tag else "") + \
-               (f"&q={keyword}" if keyword else "") + \
-               (f"&archived={archived}" if archived is not None else "")
+#     base_url = url_for('bookmarks_api.list_bookmarks', _external=True)
+#     def abs_url(page_num):
+#         return f"{base_url.split('?')[0]}?page={page_num}&per_page={per_page}" + \
+#                (f"&tag={tag}" if tag else "") + \
+#                (f"&q={keyword}" if keyword else "") + \
+#                (f"&archived={archived}" if archived is not None else "")
 
-    results = []
-    for b in pagination.items:
-        created_ist = b.created_at.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone('Asia/Kolkata'))
-        results.append({
-            'id': b.id,
-            'url': b.url,
-            'short_url': b.short_url,
-            'full_short_url': url_for('short.redirect_short', short_code=b.short_url, _external=True),
-            'title': b.title,
-            'notes': b.notes,
-            'archived': b.archived,
-            'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
-            'tags': [t.name for t in b.tags]
-        })
+#     results = []
+#     for b in pagination.items:
+#         created_ist = b.created_at.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone('Asia/Kolkata'))
+#         results.append({
+#             'id': b.id,
+#             'url': b.url,
+#             'short_url': b.short_url,
+#             'full_short_url': url_for('short.redirect_short', short_code=b.short_url, _external=True),
+#             'title': b.title,
+#             'notes': b.notes,
+#             'archived': b.archived,
+#             'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
+#             'tags': [t.name for t in b.tags]
+#         })
 
-    return jsonify({
-        'bookmarks': results,
-        'pagination': {
-            'page': page,
-            'per_page': per_page,
-            'total': pagination.total,
-            'pages': pagination.pages,
-            'has_next': pagination.has_next,
-            'has_prev': pagination.has_prev,
-            'next_url': abs_url(page + 1) if pagination.has_next else None,
-            'prev_url': abs_url(page - 1) if pagination.has_prev else None
-        }
-    }),200
+#     return jsonify({
+#         'bookmarks': results,
+#         'pagination': {
+#             'page': page,
+#             'per_page': per_page,
+#             'total': pagination.total,
+#             'pages': pagination.pages,
+#             'has_next': pagination.has_next,
+#             'has_prev': pagination.has_prev,
+#             'next_url': abs_url(page + 1) if pagination.has_next else None,
+#             'prev_url': abs_url(page - 1) if pagination.has_prev else None
+#         }
+#     }),200
 
-# display bookmark by id if exists
+#display bookmark by id if exists
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['GET'])
 def get_bookmark(bookmark_id):
     bookmark = Bookmark.query.get(bookmark_id)
@@ -251,3 +253,121 @@ def redirect_short(short_code):
     db.session.commit()
     return redirect(bookmark.url)
 
+# === EXPORT: Netscape HTML ===
+@bp.route('/export', methods=['GET'])
+def export_bookmarks():
+    bookmarks = Bookmark.query.all()
+    if not bookmarks:
+        return jsonify({'error': 'No bookmarks to export'}), 404
+
+    ist = pytz.timezone('Asia/Kolkata')
+
+    with tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8') as tmpfile:
+        tmpfile.write('<!DOCTYPE NETSCAPE-Bookmark-file-1>\n')
+        tmpfile.write('<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n')
+        tmpfile.write('<TITLE>LinkVault Bookmarks</TITLE>\n')
+        tmpfile.write('<H1>LinkVault Bookmarks</H1>\n')
+        tmpfile.write('<DL><p>\n')
+
+        for b in bookmarks:
+            created_ist = b.created_at.replace(tzinfo=pytz.UTC).astimezone(ist)
+            add_date = int(created_ist.timestamp())
+
+            title = (b.title or b.url)
+            title = title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+            tmpfile.write(f'    <DT><A HREF="{b.url}" ADD_DATE="{add_date}">{title}</A>\n')
+            if b.notes:
+                notes = b.notes.replace('&', '&amp;').replace('<', '&lt;')
+                tmpfile.write(f'    <DD>{notes}\n')
+
+        tmpfile.write('</DL><p>\n')
+
+    return_data = None
+    with open(tmpfile.name, 'rb') as f:
+        return_data = f.read()
+    os.unlink(tmpfile.name)
+
+    response = current_app.response_class(
+        response=return_data,
+        status=200,
+        mimetype='text/html'
+    )
+    response.headers.set('Content-Disposition', 'attachment', filename='linkvault_bookmarks.html')
+    return response
+
+
+# updated filter by id route
+@bp.route('/bookmarks', methods=['GET'])
+def list_bookmarks():
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    tag = request.args.get('tag')
+    q = request.args.get('q')
+    archived_param = request.args.get('archived')
+    bookmark_id = request.args.get('id', type=int)
+
+    # # === SINGLE BOOKMARK BY ID ===
+    # if bookmark_id is not None:
+    #     bookmark = Bookmark.query.filter_by(id=bookmark_id).first()
+    #     if not bookmark:
+    #         return jsonify({'bookmarks': [], 'pagination': {
+    #             'page': 1, 'pages': 0, 'per_page': per_page, 'total': 0,
+    #             'has_next': False, 'has_prev': False,
+    #             'next_url': None, 'prev_url': None
+    #         }}), 200
+
+    #     if tag:
+    #         tags_list = [t.strip() for t in tag.split(",") if t.strip()]
+    #         if not all(t in [tg.name for tg in bookmark.tags] for t in tags_list):
+    #             return jsonify({'bookmarks': [], 'pagination': {
+    #                 'page': 1, 'pages': 0, 'per_page': per_page, 'total': 0,
+    #                 'has_next': False, 'has_prev': False,
+    #                 'next_url': None, 'prev_url': None
+    #             }}), 200
+
+    #     return jsonify({
+    #         'bookmarks': [bookmark.to_dict()],
+    #         'pagination': {
+    #             'page': 1, 'pages': 1, 'per_page': 1, 'total': 1,
+    #             'has_next': False, 'has_prev': False,
+    #             'next_url': None, 'prev_url': None
+    #         }
+    #     })
+
+    # === NORMAL LIST ===
+    query = Bookmark.query
+
+    if archived_param is not None:
+        archived = archived_param.lower() == 'true'
+        query = query.filter_by(archived=archived)
+
+    if tag:
+        tags_list = [t.strip() for t in tag.split(",") if t.strip()]
+        for t in tags_list:
+            query = query.filter(Bookmark.tags.any(Tag.name == t))
+
+    if q:
+        search = f"%{q}%"
+        query = query.filter(
+            db.or_(
+                Bookmark.title.ilike(search),
+                Bookmark.url.ilike(search)
+            )
+        )
+
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+
+    return jsonify({
+        'bookmarks': [b.to_dict() for b in pagination.items],
+        'pagination': {
+            'page': page,
+            'pages': pagination.pages,
+            'per_page': per_page,
+            'total': pagination.total,
+            'has_next': pagination.has_next,
+            'has_prev': pagination.has_prev,
+            'next_url': url_for('bookmarks_api.list_bookmarks', page=page+1, per_page=per_page, _external=True) if pagination.has_next else None,
+            'prev_url': url_for('bookmarks_api.list_bookmarks', page=page-1, per_page=per_page, _external=True) if pagination.has_prev else None,
+        }
+    })

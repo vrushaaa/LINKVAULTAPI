@@ -1,4 +1,7 @@
 from datetime import datetime
+
+from flask import url_for
+import pytz
 from app import db
 import hashlib
 from urllib.parse import urlparse, urlunparse
@@ -56,3 +59,18 @@ class Bookmark(db.Model):
 
     def __repr__(self):
         return f'<Bookmark {self.short_url or self.url}>'
+    
+    def to_dict(self):
+        ist = pytz.timezone('Asia/Kolkata')
+        created_ist = self.created_at.replace(tzinfo=pytz.UTC).astimezone(ist)
+        return {
+            'id': self.id,
+            'url': self.url,
+            'short_url': self.short_url,
+            'full_short_url': url_for('short.redirect_short', short_code=self.short_url, _external=True),
+            'title': self.title,
+            'notes': self.notes,
+            'archived': self.archived,
+            'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
+            'tags': [t.name for t in self.tags]
+        }
