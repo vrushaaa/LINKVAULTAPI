@@ -26,6 +26,34 @@ def extract_title(url):
     except:
         return None
     
+# home page route
+@short_bp.route('/')
+def home():
+        return """
+    <h1 style="
+        color: #c1e328;
+        font-size: 60px;
+        text-align: center;
+        border: 3px solid #c1e328;
+        display: inline-block;
+        padding: 20px 40px;
+        border-radius: 15px;
+        box-shadow: 0 0 20px rgba(0, 128, 0, 0.5);
+        margin: 100px auto;
+    ">
+        Welcome to LinkVault API
+    </h1>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: black;
+        }
+    </style>
+    """
+    
 #bookmark creation route
 @bp.route('/bookmarks', methods=['POST'])
 def create_bookmark():
@@ -91,70 +119,6 @@ def create_bookmark():
         }
     }), 201
 
-# # display all bookmarks
-# @bp.route('/bookmarks', methods=['GET'])
-# def list_bookmarks():
-#     page = request.args.get('page', 1, type=int)
-#     per_page = request.args.get('per_page', 10, type=int)
-#     tag = request.args.get('tag')
-#     keyword = request.args.get('q')
-#     archived = request.args.get('archived', type=lambda x: x.lower() == 'true')
-
-#     query = Bookmark.query
-
-#     if tag:
-#         query = query.join(Bookmark.tags).filter(Tag.name == tag.lower())
-#     if keyword:
-#         pattern = f"%{keyword}%"
-#         query = query.filter(
-#             db.or_(
-#                 Bookmark.url.ilike(pattern),
-#                 Bookmark.title.ilike(pattern),
-#                 Bookmark.notes.ilike(pattern)
-#             )
-#         )
-#     if archived is not None:
-#         query = query.filter(Bookmark.archived == archived)
-
-#     pagination = query.order_by(Bookmark.created_at.desc()).paginate(
-#         page=page, per_page=per_page, error_out=False
-#     )
-
-#     base_url = url_for('bookmarks_api.list_bookmarks', _external=True)
-#     def abs_url(page_num):
-#         return f"{base_url.split('?')[0]}?page={page_num}&per_page={per_page}" + \
-#                (f"&tag={tag}" if tag else "") + \
-#                (f"&q={keyword}" if keyword else "") + \
-#                (f"&archived={archived}" if archived is not None else "")
-
-#     results = []
-#     for b in pagination.items:
-#         created_ist = b.created_at.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone('Asia/Kolkata'))
-#         results.append({
-#             'id': b.id,
-#             'url': b.url,
-#             'short_url': b.short_url,
-#             'full_short_url': url_for('short.redirect_short', short_code=b.short_url, _external=True),
-#             'title': b.title,
-#             'notes': b.notes,
-#             'archived': b.archived,
-#             'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
-#             'tags': [t.name for t in b.tags]
-#         })
-
-#     return jsonify({
-#         'bookmarks': results,
-#         'pagination': {
-#             'page': page,
-#             'per_page': per_page,
-#             'total': pagination.total,
-#             'pages': pagination.pages,
-#             'has_next': pagination.has_next,
-#             'has_prev': pagination.has_prev,
-#             'next_url': abs_url(page + 1) if pagination.has_next else None,
-#             'prev_url': abs_url(page - 1) if pagination.has_prev else None
-#         }
-#     }),200
 
 #display bookmark by id if exists
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['GET'])
@@ -245,7 +209,7 @@ def toggle_archive(bookmark_id):
         }
     }), 200
 
-# # url-shortner
+#  url-shortner
 @short_bp.route('/<short_code>')
 def redirect_short(short_code):
     bookmark = Bookmark.query.filter_by(short_url=short_code).first_or_404()
@@ -253,7 +217,7 @@ def redirect_short(short_code):
     db.session.commit()
     return redirect(bookmark.url)
 
-# === EXPORT: Netscape HTML ===
+# export bookmarks as HTML
 @bp.route('/export', methods=['GET'])
 def export_bookmarks():
     bookmarks = Bookmark.query.all()
@@ -301,41 +265,12 @@ def export_bookmarks():
 @bp.route('/bookmarks', methods=['GET'])
 def list_bookmarks():
     page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 50, type=int)
+    per_page = request.args.get('per_page', 5, type=int)
     tag = request.args.get('tag')
     q = request.args.get('q')
     archived_param = request.args.get('archived')
     bookmark_id = request.args.get('id', type=int)
 
-    # # === SINGLE BOOKMARK BY ID ===
-    # if bookmark_id is not None:
-    #     bookmark = Bookmark.query.filter_by(id=bookmark_id).first()
-    #     if not bookmark:
-    #         return jsonify({'bookmarks': [], 'pagination': {
-    #             'page': 1, 'pages': 0, 'per_page': per_page, 'total': 0,
-    #             'has_next': False, 'has_prev': False,
-    #             'next_url': None, 'prev_url': None
-    #         }}), 200
-
-    #     if tag:
-    #         tags_list = [t.strip() for t in tag.split(",") if t.strip()]
-    #         if not all(t in [tg.name for tg in bookmark.tags] for t in tags_list):
-    #             return jsonify({'bookmarks': [], 'pagination': {
-    #                 'page': 1, 'pages': 0, 'per_page': per_page, 'total': 0,
-    #                 'has_next': False, 'has_prev': False,
-    #                 'next_url': None, 'prev_url': None
-    #             }}), 200
-
-    #     return jsonify({
-    #         'bookmarks': [bookmark.to_dict()],
-    #         'pagination': {
-    #             'page': 1, 'pages': 1, 'per_page': 1, 'total': 1,
-    #             'has_next': False, 'has_prev': False,
-    #             'next_url': None, 'prev_url': None
-    #         }
-    #     })
-
-    # === NORMAL LIST ===
     query = Bookmark.query
 
     if archived_param is not None:

@@ -28,4 +28,6 @@ def create_app():
     app.register_blueprint(bookmarks_bp, url_prefix='/api')
     app.register_blueprint(short_bp)  # Root level
 
+    
+
     return app

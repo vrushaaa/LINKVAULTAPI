@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 linkvault_client - command-line client for LinkVault API
 Usage:
@@ -13,9 +12,6 @@ import os
 
 BASE_URL = "http://127.0.0.1:5000"   # change if you run on another host/port
 
-# ----------------------------------------------------------------------
-# Helper
-# ----------------------------------------------------------------------
 def _print(resp: requests.Response):
     click.echo(f"Status: {resp.status_code}")
     try:
@@ -23,17 +19,11 @@ def _print(resp: requests.Response):
     except Exception:
         click.echo(resp.text)
 
-
-# ----------------------------------------------------------------------
-# CLI group
-# ----------------------------------------------------------------------
 @click.group(help="LinkVault API client - CRUD + export/import")
 def cli():
     pass
 
-# --------------------------------------------------------------
-# Helper to split comma lists
-# --------------------------------------------------------------
+
 def _split_tags(tags):
     result = []
     for t in tags:
@@ -41,9 +31,6 @@ def _split_tags(tags):
     return result
 
 
-# --------------------------------------------------------------
-# CREATE
-# --------------------------------------------------------------
 @cli.command()
 @click.argument("url")
 @click.option("--title", help="Bookmark title")
@@ -56,7 +43,7 @@ def _split_tags(tags):
 @click.option("--archived", is_flag=True, help="Mark as archived")
 def create(url, title, notes, tags, archived):
     """POST /api/bookmarks - add a new bookmark."""
-    tags = _split_tags(tags)               # <-- NEW
+    tags = _split_tags(tags)               
     payload = {
         "url": url,
         "title": title or None,
@@ -67,9 +54,7 @@ def create(url, title, notes, tags, archived):
     r = requests.post(f"{BASE_URL}/api/bookmarks", json=payload)
     _print(r)
 
-# ----------------------------------------------------------------------
-# LIST
-# ----------------------------------------------------------------------
+
 @cli.command()
 @click.option("--page", default=1, type=int, help="Page number")
 @click.option("--per-page", default=10, type=int, help="Items per page")
@@ -85,15 +70,12 @@ def list(page, per_page, tag, q, archived):
         "q": q,
         "archived": "true" if archived else None,
     }
-    # drop None values
+    
     params = {k: v for k, v in params.items() if v is not None}
     r = requests.get(f"{BASE_URL}/api/bookmarks?{urlencode(params)}")
     _print(r)
 
 
-# ----------------------------------------------------------------------
-# UPDATE
-# ----------------------------------------------------------------------
 @cli.command()
 @click.argument("bookmark_id", type=int)
 @click.option("--title", help="New title")
@@ -103,7 +85,7 @@ def list(page, per_page, tag, q, archived):
 @click.option("--unarchive", is_flag=True, help="Unset archived")
 def update(bookmark_id, title, notes, tags, archived, unarchive):
     """PUT /api/bookmarks/<id> - partial update."""
-    # Convert comma lists → split into individual tags
+    
     final_tags = []
     for t in tags:
         final_tags.extend([x.strip() for x in t.split(",") if x.strip()])
@@ -124,9 +106,6 @@ def update(bookmark_id, title, notes, tags, archived, unarchive):
     _print(r)
 
 
-# ----------------------------------------------------------------------
-# DELETE
-# ----------------------------------------------------------------------
 @cli.command()
 @click.argument("bookmark_id", type=int)
 def delete(bookmark_id):
@@ -135,9 +114,6 @@ def delete(bookmark_id):
     _print(r)
 
 
-# ----------------------------------------------------------------------
-# TOGGLE ARCHIVE
-# ----------------------------------------------------------------------
 @cli.command()
 @click.argument("bookmark_id", type=int)
 def toggle_archive(bookmark_id):
@@ -146,9 +122,6 @@ def toggle_archive(bookmark_id):
     _print(r)
 
 
-# ----------------------------------------------------------------------
-# EXPORT (download HTML)
-# ----------------------------------------------------------------------
 @cli.command()
 @click.argument("output_file", type=click.Path())
 def export(output_file):
@@ -164,24 +137,6 @@ def export(output_file):
     click.echo(f"Exported to {output_file}")
 
 
-# ----------------------------------------------------------------------
-# IMPORT (upload HTML)
-# ----------------------------------------------------------------------
-@cli.command()
-@click.argument("html_file", type=click.Path(exists=True))
-def import_html(html_file):
-    """POST /api/import - upload Netscape HTML."""
-    if not html_file.endswith(".html"):
-        click.echo("File must have .html extension")
-        raise click.Abort()
-
-    with open(html_file, "rb") as f:
-        files = {"file": (os.path.basename(html_file), f, "text/html")}
-        r = requests.post(f"{BASE_URL}/api/import", files=files)
-    _print(r)
-
-
-#filter by tags
 @cli.command()
 @click.option("--page", default=1, type=int, help="Page number")
 @click.option("--per-page", default=10, type=int, help="Items per page")
@@ -211,8 +166,5 @@ def list(page, per_page, tag, q, archived, id):
     _print(r)
 
 
-# ----------------------------------------------------------------------
-# ENTRY POINT
-# ----------------------------------------------------------------------
 if __name__ == "__main__":
     cli()
