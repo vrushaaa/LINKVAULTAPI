@@ -26,210 +26,288 @@ Constructed a self-hosted bookmarking API that enables users to save, tag, and r
 **Outcome**:  
 Delivered a functional, extensible bookmarking API with CLI interoperability and duplicate prevention. The system empowers users to own their link data and demonstrates practical Flask API development with real utility for developers and researchers.
 
+# LinkVault API 🚀  
+**Bookmark & Tag Management System**  
+A Flask-based RESTful API for storing, organizing, and exporting bookmarks with tags.  
+Zero-lock-in: Export to Netscape HTML → import into Chrome/Firefox/Safari.
 
-# LinkVault CLI Client – `linkvault_client.py`
-
-A **command-line interface (CLI)** client for interacting with the **LinkVault API** — a Flask-based bookmark and tag management system.
-This tool allows you to **create, list, update, delete, export** bookmarks directly from the terminal, without needing a browser.
-
----
-
-## Features
-
-- **CRUD Operations** via REST API:
-  - `create` – Add new bookmark
-  - `list` – List bookmarks with filters (tags, search, archived, pagination)
-  - `update` – Modify title, notes, tags 
-  - `delete` – Remove bookmark
-  - `toggle_archive` – Toggle archived state
-- **Data Portability**:
-  - `export` – Download all bookmarks in **Netscape HTML format** (compatible with Chrome, Firefox, Safari)
-- **Flexible Tagging**:
-  - Support for multiple tags via `--tag python --tag api` or `--tag "python,api"`
-- **Paginated & Filterable Listing**
+![LinkVault Banner](slides/linkvaultapibg.jpeg)  
+*(Neon-green vault logo on dark background – your slides' hero image)*
 
 ---
 
-## Prerequisites
-
-- Python 3.8+
-- LinkVault API server running at `http://127.0.0.1:5000` (default)
-- `requests` and `click` Python packages
+## 📋 Table of Contents
+1. [Introduction](#introduction)  
+2. [Objectives](#objectives)  
+3. [System Architecture](#system-architecture)  
+4. [Methodology](#methodology)  
+5. [Observations](#observations)  
+6. [Demo](#demo)  
+7. [Challenges Faced](#challenges-faced)  
+8. [Key Learnings](#key-learnings)  
+9. [Project Structure](#project-structure)  
+10. [Setup (Clone & Run)](#setup)  
+11. [CLI Client](#cli-client)  
+12. [Team](#team)  
+13. [License](#license)
 
 ---
 
-## Installation
+## Introduction
+LinkVault is a **Flask-based web application** designed to manage and organize bookmarks efficiently.  
+It provides **RESTful APIs** to store, retrieve, and manage bookmarks with associated tags.  
+Includes a **URL shortener** feature for generating concise, shareable links.
 
-1. **Clone or download** the `linkvault_client.py` file.
+---
 
-2. **Install dependencies**:
+## Objectives
+- Design and develop an API for efficient URL management with optional metadata (title, notes, tags).  
+- Implement duplicate URL detection using normalized URL hashing for data consistency.  
+- Enable advanced filtering of bookmarks by tag, keyword, or archived status.  
+- Model `Bookmark` and `Tag` entities with a **many-to-many** relationship using SQLAlchemy.  
+- Develop a **CLI** for exporting bookmarks in **Netscape HTML** format (browser-compatible).  
+- Provide consistent, paginated JSON responses for large datasets.
 
+---
+
+## System Architecture
+### 1. Database Layer (SQLAlchemy + SQLite)
+```mermaid
+erDiagram
+    BOOKMARK ||--o{ BOOKMARKS_TAGS : has
+    TAG ||--o{ BOOKMARKS_TAGS : has
+    BOOKMARK {
+        int id
+        string url
+        string short_url
+        string hash_url
+        string title
+        text notes
+        boolean archived
+        datetime created_at
+        datetime updated_at
+    }
+    TAG {
+        int id
+        string name
+    }
+    BOOKMARKS_TAGS {
+        int bookmark_id
+        int tag_id
+    }
+```
+- **File-based persistence** → portable across machines.
+
+### 2. API Layer (Flask)
+- **RESTful endpoints** for CRUD  
+- `POST   /api/bookmarks` → Create  
+- `GET    /api/bookmarks` → List (filter + pagination)  
+- `PUT    /api/bookmarks/<id>` → Update  
+- `DELETE /api/bookmarks/<id>` → Remove  
+- `GET    /api/bookmarks/tags` → All tags
+
+### 3. Business Logic
+- **URL Normalization**: Strip trailing slashes, fragments, query params order.  
+- **Duplicate Detection**: SHA-256 hash of normalized URL.  
+- **Auto Title Extraction**: BeautifulSoup scrapes `<title>` if missing.
+
+### 4. CLI Interface (Click)
+- `export` → Netscape HTML (Chrome/Firefox/Safari compatible).
+
+---
+
+## Methodology
+### Data Modeling (SQLAlchemy)
+- `Bookmark` → URL, title, notes, hash, timestamps.  
+- `Tag` → Unique name.  
+- **Many-to-Many** join table.
+
+### Duplicate Prevention
+1. `urllib.parse` → normalize URL.  
+2. `hashlib.sha256` → unique hash.  
+3. Check DB → 409 Conflict if exists.
+
+### Interoperability & Usability
+- **CLI Export**: Standard Netscape format.  
+- **Paginated JSON**: Efficient large collections.
+
+---
+
+## Observations
+### Feature Demonstrations
+1. **Effective Duplicate Prevention**  
+   Normalized hashing blocks same link (www vs non-www, query order).  
+
+2. **Powerful Tag-Based Filtering**  
+   SQLAlchemy joins → `show all links tagged 'Flask' AND 'API'`.  
+
+3. **Seamless Data Portability**  
+   Exported HTML → imported into Chrome/Firefox → validated.
+
+---
+
+## Demo
+See live demo in `demo/` folder or run locally:  
+```bash
+python run.py          # Start API
+python linkvault_client.py export demo.html
+```
+Open `demo.html` in browser → **instant import!**
+
+---
+
+## Challenges Faced
+- Configuring Flask app structure using the **factory pattern**.  
+- Date-time conversion from UTC → IST.  
+- Database migration issues during model updates.  
+- Managing import paths (`ImportError: cannot import name 'db'`).  
+- Implementing URL hashing and ensuring uniqueness.  
+- Debugging route registration with Blueprints.
+
+---
+
+## Key Learnings
+- **Modular Flask design** improves maintainability.  
+- **SQLAlchemy** simplifies complex database relationships.  
+- Understanding the **ORM and migration flow** (Flask-Migrate).  
+- Proper **JSON error handling** improves API reliability.  
+- Practical experience with **RESTful API testing** using Postman.
+
+---
+
+## Project Structure
+```
+LinkVault/
+├── app/                    # Flask package
+│   ├── __init__.py         # App factory
+│   ├── models/             # SQLAlchemy models
+│   │   ├── __init__.py
+│   │   ├── bookmark.py
+│   │   └── tag.py
+│   ├── routes/             # Blueprints
+│   │   └── bookmark_routes.py
+│   ├── cli/                # Flask CLI commands
+│   │   └── linkvault_client.py     # CLI client
+│   └── utils/              # Hashing, normalization
+├── migrations/             # Alembic migrations
+├── slides/                 # PPT images (banner.png, team.jpg, etc.)
+├── tests/                  # Postman collection + unit tests
+├── .env                    # Local config (never commit)
+├── .gitignore
+├── requirements.txt
+├── run.py                  # Entry point
+├── linkvault.db            # SQLite DB (gitignored)
+└── README.md               # ← You are here!
+```
+
+---
+
+## 🚀 Setup (Clone & Run )
+
+1. **Clone the repo**
+   ```bash
+   git clone https://github.com/yourusername/LinkVault.git
+   cd LinkVault
+   ```
+
+2. **Create virtual environment** (Python 3.10+)
+   ```bash
+   python -m venv venv
+   source venv/bin/activate    # for linux/mac
+   # or
+   venv\Scripts\activate       # For windows
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Environment Variables**  
+   Create `.env` (never commit!):
+   ```env
+   FLASK_APP=app
+   FLASK_ENV=development
+   SQLALCHEMY_ECHO=True
+   ```
+
+5. **Database Setup**
+   ```bash
+   flask db upgrade 
+   ```
+
+6. **Run the API**
+   ```bash
+   python run.py
+   ```
+   → API at `http://127.0.0.1:5000/api/bookmarks`
+
+7. **Quick Test**
+   ```bash
+   curl -X POST http://127.0.0.1:5000/api/bookmarks \
+     -H "Content-Type: application/json" \
+     -d '{"url": "https://github.com", "tags": ["code"]}'
+   ```
+
+**Done!** You're vaulting links.
+
+---
+
+## LinkVault CLI Client – `linkvault_client.py`
+
+Command-line tool to **create, list, update, delete, export** bookmarks via the API.
+
+### Features
+- Full CRUD via REST  
+- Tag filtering, search, archive toggle  
+- **Export** → Netscape HTML (browser import)
+
+### Installation
 ```bash
 pip install click requests
 ```
 
-> No virtual environment required, but recommended.
+### Setup
+1. Start server: `python run.py`  
+2. (Optional) Edit `BASE_URL` in script.
 
----
-
-## Setup
-
-### 1. Start the LinkVault API Server
-
-Ensure your Flask server is running:
-
-```bash
-python run.py
-```
-
-> Server must be active at `http://127.0.0.1:5000`
-
-### 2. (Optional) Change Base URL
-
-Edit the `BASE_URL` in the script if your server runs elsewhere:
-
-```python
-BASE_URL = "http://your-server:port"  # e.g., http://192.168.1.100:5000
-```
-
----
-
-## Usage
-
-Run any command with:
-
-```bash
-python linkvault_client.py <command> [options]
-```
-
-Use `--help` for detailed help:
-
+### Usage
 ```bash
 python linkvault_client.py --help
-python linkvault_client.py create --help
 ```
+
+#### Create
+```bash
+python linkvault_client.py create "https://flask.palletsprojects.com" 
+  --title "Flask" --tags flask --tags python
+```
+
+#### List
+```bash
+python linkvault_client.py list --tag python --page 1 --per-page 5
+```
+
+#### Export
+```bash
+python linkvault_client.py export my_vault.html
+```
+→ Open in browser 
 
 ---
 
-## Commands
+## Meet Our Team
+![Team Photo](slides/team.jpg)  
 
-### Create a Bookmark
-
-```bash
-python linkvault_client.py create "https://github.com" \
-  --title "GitHub" \
-  --notes "Code hosting platform" \
-  --tags python --tags git --tags dev
-```
-
-### List Bookmarks
-
-```bash
-# All bookmarks (paginated)
-python linkvault_client.py list
-
-# Filter by tag
-python linkvault_client.py list --tag python --tag api
-
-# Search keyword
-python linkvault_client.py list --q flask
-
-# Show archived only
-python linkvault_client.py list --archived
-
-# Pagination
-python linkvault_client.py list --page 2 --per-page 20
-```
-
-### Update a Bookmark
-
-```bash
-python linkvault_client.py update 5 \
-  --title "Updated Title" \
-  --tags newtag --tags updated \
-  --archived
-```
-
-### Delete a Bookmark
-
-```bash
-python linkvault_client.py delete 3
-```
-
-### Toggle Archive
-
-```bash
-python linkvault_client.py toggle_archive 7
-```
-
-### Export to Browser-Compatible HTML
-
-```bash
-python linkvault_client.py export my_bookmarks.html
-```
-
-> Open `my_bookmarks.html` in Chrome/Firefox → Import via Bookmarks Manager
-
----
-
-## Example Workflow
-
-```bash
-# 1. Add a bookmark
-python linkvault_client.py create "https://flask.palletsprojects.com" --tags flask --tags python
-
-# 2. List with filter
-python linkvault_client.py list --tag flask
-
-# 3. Export all
-python linkvault_client.py export vault_backup.html
-```
-
----
-
-## Project Structure (Recommended)
-
-```
-linkvault/
-├── run.py                  # Flask server
-├── linkvault.db            # SQLite database
-├── linkvault_client.py     # This CLI client
-└── bookmarks_export.html   # Exported file
-```
-
----
-
-## Notes
-
-- **No direct DB access** – CLI talks to API only (secure & portable)
-- Uses **Click** for elegant CLI parsing
-- Uses **requests** for HTTP communication
-- Supports **comma-separated tags**: `--tags "python,api,web"`
-- All responses are printed in **pretty JSON**
-
----
-
-## Team
-
-**LinkVault API & CLI**  
-Developed by:
-
-- Shubham Kapolkar  
-- Dhruv Malvankar  
-- Kalpita Naik  
-- Vrusha Naik
+**DHRUV MALVANKAR** | **KALPITA NAIK** | **SHUBHAM KAPOLKAR** | **VRUSHA NAIK**
 
 ---
 
 ## License
-
-MIT License – Free to use, modify, and distribute.
+[MIT License](LICENSE) – Free to use, modify, distribute.
 
 ---
 
 **LinkVault – Own Your Links. Organize with Tags. Export Anywhere.**
 
---- 
+*API docs in `app/routes/bookmark_routes.py` | Test with [Postman Collection](tests/LinkVault.postman_collection.json)*
 
-*For API documentation, see `bookmark_routes.py` or use Postman.*  
-*For server CLI (direct DB access), see `linkvault` package.*
