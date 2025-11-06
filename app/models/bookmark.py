@@ -74,3 +74,5 @@ class Bookmark(db.Model):
             'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
             'tags': [t.name for t in self.tags]
         }
+    
+    # add user 

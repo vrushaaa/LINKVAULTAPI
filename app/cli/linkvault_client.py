@@ -19,7 +19,7 @@ def _print(resp: requests.Response):
     except Exception:
         click.echo(resp.text)
 
-@click.group(help="LinkVault API client - CRUD + export/import")
+@click.group(help="LinkVault API client - CRUD + export")
 def cli():
     pass
 
@@ -30,7 +30,7 @@ def _split_tags(tags):
         result.extend([x.strip() for x in t.split(",") if x.strip()])
     return result
 
-
+#create bookmark
 @cli.command()
 @click.argument("url")
 @click.option("--title", help="Bookmark title")
@@ -54,10 +54,10 @@ def create(url, title, notes, tags, archived):
     r = requests.post(f"{BASE_URL}/api/bookmarks", json=payload)
     _print(r)
 
-
+#pagination and filtering
 @cli.command()
 @click.option("--page", default=1, type=int, help="Page number")
-@click.option("--per-page", default=10, type=int, help="Items per page")
+@click.option("--per-page", default=5, type=int, help="Items per page")
 @click.option("--tag", help="Filter by tag")
 @click.option("--q", help="Search keyword")
 @click.option("--archived", is_flag=True, help="Show only archived")
@@ -75,7 +75,7 @@ def list(page, per_page, tag, q, archived):
     r = requests.get(f"{BASE_URL}/api/bookmarks?{urlencode(params)}")
     _print(r)
 
-
+#update bookmark
 @cli.command()
 @click.argument("bookmark_id", type=int)
 @click.option("--title", help="New title")
@@ -105,7 +105,7 @@ def update(bookmark_id, title, notes, tags, archived, unarchive):
     r = requests.put(f"{BASE_URL}/api/bookmarks/{bookmark_id}", json=payload)
     _print(r)
 
-
+#delete bookmark
 @cli.command()
 @click.argument("bookmark_id", type=int)
 def delete(bookmark_id):
@@ -113,7 +113,7 @@ def delete(bookmark_id):
     r = requests.delete(f"{BASE_URL}/api/bookmarks/{bookmark_id}")
     _print(r)
 
-
+#toggle archive
 @cli.command()
 @click.argument("bookmark_id", type=int)
 def toggle_archive(bookmark_id):
@@ -121,7 +121,7 @@ def toggle_archive(bookmark_id):
     r = requests.patch(f"{BASE_URL}/api/bookmarks/{bookmark_id}/archive")
     _print(r)
 
-
+#export bookmarks
 @cli.command()
 @click.argument("output_file", type=click.Path())
 def export(output_file):
@@ -136,10 +136,10 @@ def export(output_file):
             f.write(chunk)
     click.echo(f"Exported to {output_file}")
 
-
+#filter by multiple tags
 @cli.command()
 @click.option("--page", default=1, type=int, help="Page number")
-@click.option("--per-page", default=10, type=int, help="Items per page")
+@click.option("--per-page", default=5, type=int, help="Items per page")
 @click.option("--tag", multiple=True, help="Filter by tags (repeat --tag)")
 @click.option("--q", help="Search keyword")
 @click.option("--archived", is_flag=True, help="Show only archived")
@@ -158,7 +158,7 @@ def list(page, per_page, tag, q, archived, id):
 
     params = {k: v for k, v in params.items() if v is not None}
     
-    url = f"{BASE_URL}/api/bookmarks"
+    url = f"{BASE_URL}/api/bookmarks/{id}"
     if params:
         url += "?" + urlencode(params)
     

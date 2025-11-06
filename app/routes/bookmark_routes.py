@@ -9,6 +9,8 @@ from urllib.parse import urljoin
 import pytz
 from datetime import datetime
 
+# parameter checking for all routes
+
 #blueprints
 bp = Blueprint('bookmarks_api', __name__)
 short_bp = Blueprint('short', __name__)
@@ -260,9 +262,9 @@ def export_bookmarks():
     response.headers.set('Content-Disposition', 'attachment', filename='linkvault_bookmarks.html')
     return response
 
-
+# filtering by tag if else logic to be applied
 # updated filter by id route
-@bp.route('/bookmarks', methods=['GET'])
+@bp.route('/bookmarks/', methods=['GET'])
 def list_bookmarks():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 5, type=int)
@@ -277,6 +279,7 @@ def list_bookmarks():
         archived = archived_param.lower() == 'true'
         query = query.filter_by(archived=archived)
 
+    # here 
     if tag:
         tags_list = [t.strip() for t in tag.split(",") if t.strip()]
         for t in tags_list:
