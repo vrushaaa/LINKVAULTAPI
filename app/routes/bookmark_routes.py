@@ -1,6 +1,6 @@
 import os
 import tempfile
-from flask import Blueprint, current_app, request, jsonify, url_for, redirect
+from flask import Blueprint, current_app, render_template, request, jsonify, url_for, redirect
 from app import db
 from app.models.bookmark import Bookmark, generate_url_hash, normalize_url
 from app.models.tag import Tag
@@ -31,30 +31,7 @@ def extract_title(url):
 # home page route
 @short_bp.route('/')
 def home():
-        return """
-    <h1 style="
-        color: #c1e328;
-        font-size: 60px;
-        text-align: center;
-        border: 3px solid #c1e328;
-        display: inline-block;
-        padding: 20px 40px;
-        border-radius: 15px;
-        box-shadow: 0 0 20px rgba(0, 128, 0, 0.5);
-        margin: 100px auto;
-    ">
-        Welcome to LinkVault API
-    </h1>
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: black;
-        }
-    </style>
-    """
+        return render_template('welcome.html'),200
     
 #bookmark creation route
 @bp.route('/bookmarks', methods=['POST'])
