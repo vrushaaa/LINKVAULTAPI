@@ -299,3 +299,75 @@ def list_bookmarks():
             'prev_url': url_for('bookmarks_api.list_bookmarks', page=page-1, per_page=per_page, _external=True) if pagination.has_prev else None,
         }
     })
+
+#error handling for bp
+@bp.errorhandler(400)
+def bad_request(error):
+    return jsonify({
+        'error': 'Bad Request',
+        'message': str(error.description) if hasattr(error, 'description') else 'Invalid request data'
+    }), 400
+
+@bp.errorhandler(404)
+def not_found(error):
+    return jsonify({
+        'error': 'Not Found',
+        'message': 'The requested resource does not exist'
+    }), 404
+
+@bp.errorhandler(405)
+def method_not_allowed(error):
+    return jsonify({
+        'error': 'Method Not Allowed',
+        'message': 'HTTP method not supported for this endpoint'
+    }), 405
+
+@bp.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return jsonify({
+        'error': 'Internal Server Error',
+        'message': 'An unexpected error occurred'
+    }), 500
+
+@bp.errorhandler(ValueError)
+def validation_error(error):
+    return jsonify({
+        'error': 'Validation Error',
+        'message': str(error)
+    }), 400
+
+@bp.errorhandler(db.exc.IntegrityError)
+def integrity_error(error):
+    db.session.rollback()
+    return jsonify({
+        'error': 'Database Error',
+        'message': 'Data integrity violation (e.g. duplicate entry)'
+    }), 400
+
+@bp.errorhandler(Exception)
+def unhandled_exception(error):
+    db.session.rollback()
+    current_app.logger.error(f'Unhandled Exception: {error}', exc_info=True)
+    return jsonify({
+        'error': 'Server Error',
+        'message': 'Something went wrong. Please try again later.'
+    }), 500   
+
+#erroe handling for short_bp 
+@short_bp.errorhandler(404)
+def short_not_found(error):
+    # If someone visits /invalidcode
+    return jsonify({
+        'error': 'Not Found',
+        'message': 'Short URL does not exist'
+    }), 404
+
+@short_bp.errorhandler(Exception)
+def short_unhandled(error):
+    db.session.rollback()
+    current_app.logger.error(f'Short URL Error: {error}', exc_info=True)
+    return jsonify({
+        'error': 'Server Error',
+        'message': 'Failed to redirect. Please try again later.'
+    }), 500
