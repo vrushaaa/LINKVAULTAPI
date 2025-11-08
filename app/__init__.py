@@ -1,5 +1,5 @@
 import os
-from flask import Flask, jsonify,request
+from flask import Flask, jsonify,request, current_app
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 

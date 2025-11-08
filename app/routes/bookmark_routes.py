@@ -239,6 +239,40 @@ def export_bookmarks():
     response.headers.set('Content-Disposition', 'attachment', filename='linkvault_bookmarks.html')
     return response
 
+@bp.route('/tags', methods=['GET'])
+def list_tags():
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+
+    #validate pagination
+    if page < 1:
+        page = 1
+    if per_page < 1:
+        per_page = 20
+    if per_page > 100:
+        per_page = 100
+
+    #query distinct tags
+    pagination = (
+        Tag.query
+        .order_by(Tag.name)
+        .paginate(page=page, per_page=per_page, error_out=False)
+    )
+
+    return jsonify({
+        'tags': [tag.name for tag in pagination.items],
+        'pagination': {
+            'page': page,
+            'pages': pagination.pages,
+            'per_page': per_page,
+            'total': pagination.total,
+            'has_next': pagination.has_next,
+            'has_prev': pagination.has_prev,
+            'next_url': url_for('bookmarks_api.list_tags', page=page+1, per_page=per_page, _external=True) if pagination.has_next else None,
+            'prev_url': url_for('bookmarks_api.list_tags', page=page-1, per_page=per_page, _external=True) if pagination.has_prev else None,
+        }
+    }), 200
+
 # filtering by tag if else logic to be applied
 # updated filter by id route
 @bp.route('/bookmarks/', methods=['GET'])
