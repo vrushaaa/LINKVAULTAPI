@@ -250,13 +250,23 @@ def list_bookmarks():
     archived_param = request.args.get('archived')
     bookmark_id = request.args.get('id', type=int)
 
+    # validate allowed query parameters
+    allowed_params = {'page', 'per_page', 'tag', 'q', 'archived', 'id'}
+    invalid_params = set(request.args.keys()) - allowed_params
+    if invalid_params:
+        return jsonify({
+            'error': 'Invalid query parameter(s)',
+            'invalid': list(invalid_params),
+            'allowed': list(allowed_params),
+            'correct_url_example': url_for('bookmarks_api.list_bookmarks', _external=True)
+        }), 400
+
     query = Bookmark.query
 
     if archived_param is not None:
         archived = archived_param.lower() == 'true'
         query = query.filter_by(archived=archived)
 
-    # here 
     if tag:
         tags_list = [t.strip() for t in tag.split(",") if t.strip()]
         for t in tags_list:
@@ -270,6 +280,9 @@ def list_bookmarks():
                 Bookmark.url.ilike(search)
             )
         )
+
+    # if bookmark_id:
+    #     query = query.filter(Bookmark.id == bookmark_id)
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
