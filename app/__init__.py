@@ -1,64 +1,68 @@
-import os
-from flask import Flask, jsonify,request, current_app
+# app/__init__.py
+from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from config import Config
 
+# === DECLARE db & migrate FIRST ===
 db = SQLAlchemy()
 migrate = Migrate()
 
 def create_app():
     app = Flask(__name__)
-
-    # loading config
-    from config import Config
     app.config.from_object(Config)
 
-    #initializing
+    # === INIT EXTENSIONS ===
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # importing models to register with SQLAlchemy
-    from app.models.bookmark import Bookmark  
-    from app.models.tag import Tag      
+    # === NOW IMPORT MODELS (after db is ready) ===
+    from app.models.bookmark import Bookmark, bookmark_tags
+    from app.models.tag import Tag
 
-    from app.routes.bookmark_routes import bp as bookmarks_bp
+    # === REGISTER BLUEPRINTS ===
+    from app.routes.bookmark_routes import bp
     from app.routes.bookmark_routes import short_bp
+    app.register_blueprint(bp, url_prefix='/api')
+    app.register_blueprint(short_bp)
 
-    #global error handling for undefined routes
-    @app.errorhandler(404)
-    def not_found(error):
-        return jsonify({
-            'error': 'Not Found',
-            'message': 'The requested endpoint does not exist',
-            'available_endpoints': [
-                'POST /api/bookmarks',
-                'GET /api/bookmarks/',
-                'GET /api/bookmarks/<id>',
-                'PUT /api/bookmarks/<id>',
-                'DELETE /api/bookmarks/<id>',
-                'GET /api/export',
-                'GET /<short_code>'
-            ]
-        }), 404
+    # === WELCOME ROUTE ===
+    @app.route('/')
+    def welcome():
+        return render_template('welcome.html'), 200
 
-    @app.errorhandler(405)
-    def method_not_allowed(error):
-        return jsonify({
-            'error': 'Method Not Allowed',
-            'message': f'Method {request.method} not allowed for {request.path}',
-            'allowed_methods': ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
-        }), 405
+    # === AUTO UPDATE Tag.bookmark_count ===
+    from sqlalchemy import event
 
-    @app.errorhandler(500)
-    def internal_server_error(error):
-        db.session.rollback()
-        current_app.logger.error(f'Unhandled Exception: {error}', exc_info=True)
-        return jsonify({
-            'error': 'Internal Server Error',
-            'message': 'Something went wrong. Please try again later.'
-        }), 500
+    @event.listens_for(db.session, "after_flush")
+    def update_tag_counts(session, flush_context):
+        tag_ids_to_update = set()
 
-    app.register_blueprint(bookmarks_bp, url_prefix='/api')
-    app.register_blueprint(short_bp)  # Root level
+        for obj in session.new | session.dirty | session.deleted:
+            if isinstance(obj, Bookmark):
+                # Current tags
+                for tag in obj.tags:
+                    tag_ids_to_update.add(tag.id)
+
+                # If deleted, get old tags from DB
+                if obj in session.deleted:
+                    old_tags = db.session.execute(
+                        db.select(bookmark_tags.c.tag_id)
+                        .where(bookmark_tags.c.bookmark_id == obj.id)
+                    ).scalars().all()
+                    tag_ids_to_update.update(old_tags)
+
+        # Update counts
+        for tag_id in tag_ids_to_update:
+            count = db.session.scalar(
+                db.select(db.func.count())
+                .select_from(bookmark_tags)
+                .where(bookmark_tags.c.tag_id == tag_id)
+            )
+            db.session.execute(
+                db.update(Tag)
+                .where(Tag.id == tag_id)
+                .values(bookmark_count=count)
+            )
 
     return app
