@@ -6,6 +6,8 @@ from app import db
 import hashlib
 from urllib.parse import urlparse, urlunparse
 
+from app.models.user import User
+
 # association table for many-to-many
 bookmark_tags = db.Table(
     'bookmark_tags',
@@ -27,22 +29,21 @@ def normalize_url(url: str) -> str:
     return normalized
 
 def generate_url_hash(url: str) -> str:
-    """Generate SHA-256 hash of normalized URL."""
     norm_url = normalize_url(url)
     return hashlib.sha256(norm_url.encode('utf-8')).hexdigest()
 
 class Bookmark(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     url = db.Column(db.String(500), nullable=False)
-    short_url = db.Column(db.String(20), unique=True)  #e.g. x7k9p
-    hash_url = db.Column(db.String(64), unique=True, nullable=False)  #SHA-256
+    short_url = db.Column(db.String(20), unique=True)
+    hash_url = db.Column(db.String(64), unique=True, nullable=False)
     title = db.Column(db.String(200))
     notes = db.Column(db.Text)
     archived = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # relationships
+     # relationships
     tags = db.relationship('Tag', secondary=bookmark_tags, back_populates='bookmarks')
 
     def set_hash(self):
@@ -60,19 +61,53 @@ class Bookmark(db.Model):
     def __repr__(self):
         return f'<Bookmark {self.short_url or self.url}>'
     
-    def to_dict(self):
+    # def to_dict(self):
+    #     ist = pytz.timezone('Asia/Kolkata')
+    #     created_ist = self.created_at.replace(tzinfo=pytz.UTC).astimezone(ist)
+        
+    #     # Get owner via backref
+    #     owner = None
+    #     if self.saved_by_users:
+    #         owner = self.saved_by_users[0].username  # or loop if multiple
+
+    #     return {
+    #         'id': self.id,
+    #         'url': self.url,
+    #         'short_url': self.short_url,
+    #         'full_short_url': url_for('short.redirect_short', short_code=self.short_url, _external=True),
+    #         'title': self.title,
+    #         'notes': self.notes,
+    #         'archived': self.archived,
+    #         'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
+    #         'tags': [t.name for t in self.tags],
+    #         'owner': owner
+    #     }
+
+    def to_dict(self, user_id=None):
         ist = pytz.timezone('Asia/Kolkata')
         created_ist = self.created_at.replace(tzinfo=pytz.UTC).astimezone(ist)
+        user_data = None
+        if user_id:
+            from app.models.user_bookmark import user_bookmarks
+            stmt = user_bookmarks.select().where(
+                user_bookmarks.c.user_id == user_id,
+                user_bookmarks.c.bookmark_id == self.id
+            )
+            result = db.session.execute(stmt).first()
+            if result:
+                user_data = {
+                    'notes': result.notes,
+                    'archived': result.archived
+                }
+
         return {
             'id': self.id,
             'url': self.url,
             'short_url': self.short_url,
             'full_short_url': url_for('short.redirect_short', short_code=self.short_url, _external=True),
             'title': self.title,
-            'notes': self.notes,
-            'archived': self.archived,
+            'notes': user_data['notes'] if user_data else self.notes,
+            'archived': user_data['archived'] if user_data else self.archived,
             'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
-            'tags': [t.name for t in self.tags]
+            'tags': [t.name for t in self.tags],
         }
-    
-    # add user 
