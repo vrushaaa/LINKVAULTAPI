@@ -4,14 +4,14 @@ from flask import Blueprint, current_app, render_template, request, jsonify, url
 from app import db
 from app.models.bookmark import Bookmark, generate_url_hash, normalize_url
 from app.models.tag import Tag
+from app.models.user import User 
 from urllib.parse import urljoin
-#import re
 import pytz
 from datetime import datetime
 
 # parameter checking for all routes
 
-#blueprints
+#bluprints
 bp = Blueprint('bookmarks_api', __name__)
 short_bp = Blueprint('short', __name__)
 
@@ -27,12 +27,12 @@ def extract_title(url):
         return soup.title.string.strip() if soup.title else None
     except:
         return None
-    
+
 # home page route
 @short_bp.route('/')
 def home():
-        return render_template('welcome.html'),200
-    
+    return render_template('welcome.html'), 200
+
 #bookmark creation route
 @bp.route('/bookmarks', methods=['POST'])
 def create_bookmark():
@@ -42,12 +42,19 @@ def create_bookmark():
     notes = data.get('notes')
     tags = data.get('tags', [])
     archived = data.get('archived', False)
+    user_id = data.get('user_id') 
 
     if not url:
         return jsonify({'error': 'URL is required'}), 400
+    if not user_id:
+        return jsonify({'error': 'user_id is required'}), 400
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
 
     norm_url = normalize_url(url)
-    url_hash = generate_url_hash(url)
+    url_hash = generate_url_hash(norm_url)
 
     existing = Bookmark.query.filter_by(hash_url=url_hash).first()
     if existing:
@@ -58,11 +65,17 @@ def create_bookmark():
                 'id': existing.id,
                 'url': existing.url,
                 'short_url': existing.short_url,
-                'full_short_url': short_url
+                'full_short_url': short_url,
+                'user_id': existing.user_id
             }
         }), 409
 
-    bookmark = Bookmark(url=norm_url, notes=notes, archived=archived)
+    bookmark = Bookmark(
+        url=norm_url,
+        notes=notes,
+        archived=archived,
+        user_id=user_id  
+    )
     bookmark.set_hash()
     bookmark.set_short_url()
 
@@ -87,40 +100,17 @@ def create_bookmark():
 
     return jsonify({
         'message': 'Bookmark created',
-        'bookmark': {
-            'id': bookmark.id,
-            'url': bookmark.url,
-            'short_url': bookmark.short_url,
-            'full_short_url': short_url,
-            'title': bookmark.title,
-            'created_at': ist_time.strftime('%Y-%m-%d %H:%M:%S IST'),
-            'tags': [t.name for t in bookmark.tags]
-        }
+        'bookmark': bookmark.to_dict() 
     }), 201
-
 
 #display bookmark by id if exists
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['GET'])
 def get_bookmark(bookmark_id):
     bookmark = Bookmark.query.get(bookmark_id)
-
     if not bookmark:
         return jsonify({'error': 'Bookmark not found'}), 404
 
-    created_ist = bookmark.created_at.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone('Asia/Kolkata'))
-
-    return jsonify({
-        'id': bookmark.id,
-        'url': bookmark.url,
-        'short_url': bookmark.short_url,
-        'full_short_url': url_for('short.redirect_short', short_code=bookmark.short_url, _external=True),
-        'title': bookmark.title,
-        'notes': bookmark.notes,
-        'archived': bookmark.archived,
-        'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
-        'tags': [t.name for t in bookmark.tags]
-    }), 200
-
+    return jsonify(bookmark.to_dict()), 200
 
 # update bookmark
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['PUT'])
@@ -134,6 +124,12 @@ def update_bookmark(bookmark_id):
         bookmark.notes = data['notes']
     if 'archived' in data:
         bookmark.archived = data['archived']
+    if 'user_id' in data:
+        new_user = User.query.get(data['user_id'])
+        if not new_user:
+            return jsonify({'error': 'User not found'}), 404
+        bookmark.user_id = new_user.id
+
     if 'tags' in data:
         bookmark.tags = []
         for tag_name in data['tags']:
@@ -149,16 +145,7 @@ def update_bookmark(bookmark_id):
 
     return jsonify({
         'message': 'Bookmark updated',
-        'bookmark': {
-            'id': bookmark.id,
-            'url': bookmark.url,
-            'short_url': bookmark.short_url,
-            'full_short_url': url_for('short.redirect_short', short_code=bookmark.short_url, _external=True),
-            'title': bookmark.title,
-            'notes': bookmark.notes,
-            'archived': bookmark.archived,
-            'tags': [t.name for t in bookmark.tags]
-        }
+        'bookmark': bookmark.to_dict()
     }), 200
 
 # delete Bookmark using id
@@ -169,7 +156,6 @@ def delete_bookmark(bookmark_id):
     db.session.commit()
     return jsonify({'message': 'Bookmark deleted'}), 200
 
-
 # toggle archive status
 @bp.route('/bookmarks/<int:bookmark_id>/archive', methods=['PATCH'])
 def toggle_archive(bookmark_id):
@@ -179,13 +165,7 @@ def toggle_archive(bookmark_id):
 
     return jsonify({
         'message': 'Archive status toggled',
-        'bookmark': {
-            'id': bookmark.id,
-            'url': bookmark.url,
-            'short_url': bookmark.short_url,
-            'full_short_url': url_for('short.redirect_short', short_code=bookmark.short_url, _external=True),
-            'archived': bookmark.archived
-        }
+        'bookmark': bookmark.to_dict()
     }), 200
 
 #  url-shortner
@@ -196,10 +176,21 @@ def redirect_short(short_code):
     db.session.commit()
     return redirect(bookmark.url)
 
+
 # export bookmarks as HTML
 @bp.route('/export', methods=['GET'])
 def export_bookmarks():
-    bookmarks = Bookmark.query.all()
+    user_id = request.args.get('user_id')
+    query = Bookmark.query
+    if user_id:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        query = query.filter_by(user_id=user_id)
+    else:
+        query = query.all()
+
+    bookmarks = query.all()
     if not bookmarks:
         return jsonify({'error': 'No bookmarks to export'}), 404
 
@@ -215,10 +206,7 @@ def export_bookmarks():
         for b in bookmarks:
             created_ist = b.created_at.replace(tzinfo=pytz.UTC).astimezone(ist)
             add_date = int(created_ist.timestamp())
-
-            title = (b.title or b.url)
-            title = title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-
+            title = (b.title or b.url).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             tmpfile.write(f'    <DT><A HREF="{b.url}" ADD_DATE="{add_date}">{title}</A>\n')
             if b.notes:
                 notes = b.notes.replace('&', '&amp;').replace('<', '&lt;')
@@ -236,28 +224,21 @@ def export_bookmarks():
         status=200,
         mimetype='text/html'
     )
-    response.headers.set('Content-Disposition', 'attachment', filename='linkvault_bookmarks.html')
+    filename = f'linkvault_bookmarks_user{user_id}.html' if user_id else 'linkvault_bookmarks.html'
+    response.headers.set('Content-Disposition', 'attachment', filename=filename)
     return response
 
+# list all tags
 @bp.route('/tags', methods=['GET'])
 def list_tags():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 20, type=int)
 
-    #validate pagination
-    if page < 1:
-        page = 1
-    if per_page < 1:
-        per_page = 20
-    if per_page > 100:
-        per_page = 100
+    if page < 1: page = 1
+    if per_page < 1: per_page = 20
+    if per_page > 100: per_page = 100
 
-    #query distinct tags
-    pagination = (
-        Tag.query
-        .order_by(Tag.name)
-        .paginate(page=page, per_page=per_page, error_out=False)
-    )
+    pagination = Tag.query.order_by(Tag.name).paginate(page=page, per_page=per_page, error_out=False)
 
     return jsonify({
         'tags': [tag.name for tag in pagination.items],
@@ -275,27 +256,31 @@ def list_tags():
 
 # filtering by tag if else logic to be applied
 # updated filter by id route
-@bp.route('/bookmarks/', methods=['GET'])
+@bp.route('/bookmarks', methods=['GET'])
 def list_bookmarks():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 5, type=int)
     tag = request.args.get('tag')
     q = request.args.get('q')
     archived_param = request.args.get('archived')
-    bookmark_id = request.args.get('id', type=int)
+    user_id = request.args.get('user_id', type=int)
 
-    # validate allowed query parameters
-    allowed_params = {'page', 'per_page', 'tag', 'q', 'archived', 'id'}
+    allowed_params = {'page', 'per_page', 'tag', 'q', 'archived', 'user_id'}
     invalid_params = set(request.args.keys()) - allowed_params
     if invalid_params:
         return jsonify({
             'error': 'Invalid query parameter(s)',
             'invalid': list(invalid_params),
-            'allowed': list(allowed_params),
-            'correct_url_example': url_for('bookmarks_api.list_bookmarks', _external=True)
+            'allowed': list(allowed_params)
         }), 400
 
     query = Bookmark.query
+
+    if user_id:
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+        query = query.filter_by(user_id=user_id)
 
     if archived_param is not None:
         archived = archived_param.lower() == 'true'
@@ -315,9 +300,6 @@ def list_bookmarks():
             )
         )
 
-    # if bookmark_id:
-    #     query = query.filter(Bookmark.id == bookmark_id)
-
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
     return jsonify({
@@ -332,76 +314,18 @@ def list_bookmarks():
             'next_url': url_for('bookmarks_api.list_bookmarks', page=page+1, per_page=per_page, _external=True) if pagination.has_next else None,
             'prev_url': url_for('bookmarks_api.list_bookmarks', page=page-1, per_page=per_page, _external=True) if pagination.has_prev else None,
         }
-    })
+    }), 200
 
-#error handling for bp
+# error handling for bp
 @bp.errorhandler(400)
 def bad_request(error):
-    return jsonify({
-        'error': 'Bad Request',
-        'message': str(error.description) if hasattr(error, 'description') else 'Invalid request data'
-    }), 400
-
-# @bp.errorhandler(404)
-# def not_found(error):
-#     return jsonify({
-#         'error': 'Not Found',
-#         'message': 'The requested resource does not exist'
-#     }), 404
-
-# @bp.errorhandler(405)
-# def method_not_allowed(error):
-#     return jsonify({
-#         'error': 'Method Not Allowed',
-#         'message': 'HTTP method not supported for this endpoint'
-#     }), 405
-
-# @bp.errorhandler(500)
-# def internal_error(error):
-#     db.session.rollback()
-#     return jsonify({
-#         'error': 'Internal Server Error',
-#         'message': 'An unexpected error occurred'
-#     }), 500
+    return jsonify({'error': 'Bad Request', 'message': str(error.description)}), 400
 
 @bp.errorhandler(ValueError)
 def validation_error(error):
-    return jsonify({
-        'error': 'Validation Error',
-        'message': str(error)
-    }), 400
+    return jsonify({'error': 'Validation Error', 'message': str(error)}), 400
 
 @bp.errorhandler(db.exc.IntegrityError)
 def integrity_error(error):
     db.session.rollback()
-    return jsonify({
-        'error': 'Database Error',
-        'message': 'Data integrity violation (e.g. duplicate entry)'
-    }), 400
-
-# @bp.errorhandler(Exception)
-# def unhandled_exception(error):
-#     db.session.rollback()
-#     current_app.logger.error(f'Unhandled Exception: {error}', exc_info=True)
-#     return jsonify({
-#         'error': 'Server Error',
-#         'message': 'Something went wrong. Please try again later.'
-#     }), 500   
-
-#erroe handling for short_bp 
-# @short_bp.errorhandler(404)
-# def short_not_found(error):
-#     # If someone visits /invalidcode
-#     return jsonify({
-#         'error': 'Not Found',
-#         'message': 'Short URL does not exist'
-#     }), 404
-
-# @short_bp.errorhandler(Exception)
-# def short_unhandled(error):
-#     db.session.rollback()
-#     current_app.logger.error(f'Short URL Error: {error}', exc_info=True)
-#     return jsonify({
-#         'error': 'Server Error',
-#         'message': 'Failed to redirect. Please try again later.'
-#     }), 500
+    return jsonify({'error': 'Database Error', 'message': 'Data integrity violation'}), 400
