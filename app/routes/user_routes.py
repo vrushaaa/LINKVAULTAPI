@@ -8,8 +8,7 @@ from app import db
 from sqlalchemy.exc import IntegrityError
 import re
 
-# ← CHANGE: bp → user_bp
-user_bp = Blueprint('user',__name__)   # ← remove url_prefix here
+user_bp = Blueprint('user',__name__)  
 
 def validate_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -95,7 +94,7 @@ def get_user_bookmarks(user_id):
         return jsonify({'error': 'Failed to retrieve bookmarks', 'details': str(e)}), 500
 
 
-# Error Handlers
+# Error handling
 @user_bp.errorhandler(400)
 def bad_request(e):
     return jsonify({'error': 'Bad Request', 'message': str(e.description) if hasattr(e, 'description') else 'Invalid input'}), 400

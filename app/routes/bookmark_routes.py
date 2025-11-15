@@ -1,4 +1,3 @@
-# app/routes/bookmark_routes.py
 import os
 import tempfile
 from flask import Blueprint, current_app, render_template, request, jsonify, url_for, redirect, Response
@@ -6,7 +5,6 @@ from app import db
 from app.models.bookmark import Bookmark, generate_url_hash, normalize_url
 from app.models.tag import Tag
 from app.models.user import User
-# from app.models.user_bookmark import user_bookmarks, UserBookmark
 from app.models.user_bookmark import UserBookmark
 from app.models.tag_user_bookmark import tag_user_bookmarks
 from urllib.parse import urljoin
@@ -15,28 +13,27 @@ from datetime import datetime
 import requests
 from bs4 import BeautifulSoup
 
-# Blueprints
+# blueprints
 bp = Blueprint('bookmarks_api', __name__, url_prefix='/api')
-short_bp = Blueprint('short', __name__, url_prefix='/')   # ← FIXED HERE
+short_bp = Blueprint('short', __name__, url_prefix='/') 
 
-# ===================== HOME PAGE =====================
+# home page
 @short_bp.route('/')
 def home():
     return render_template('welcome.html'), 200
 
-# ===================== SHORT URL REDIRECT =====================
+# short url redirect
 @short_bp.route('/<short_code>')
-def redirect_short(short_code):   # ← function name matches endpoint
+def redirect_short(short_code):   
     bookmark = Bookmark.query.filter_by(short_url=short_code).first_or_404()
     bookmark.updated_at = datetime.utcnow()
     db.session.commit()
     return redirect(bookmark.url)
 
-# ===================== TITLE EXTRACTION =====================
+# title extraction using web scrapping
 def extract_title(url):
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        # ← CHANGE: remove verify=False
         response = requests.get(url, headers=headers, timeout=8)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -45,7 +42,7 @@ def extract_title(url):
     except Exception:
         return None
 
-# ===================== CREATE BOOKMARK =====================
+# create bookmark
 @bp.route('/bookmarks', methods=['POST'])
 def create_bookmark():
     data = request.get_json()
@@ -68,7 +65,6 @@ def create_bookmark():
     existing = Bookmark.query.filter_by(hash_url=url_hash).first()
 
     if existing:
-        # ← FIX: use db.select()
         stmt = db.select(UserBookmark).where(
             UserBookmark.c.user_id == user_id,
             UserBookmark.c.bookmark_id == existing.id
@@ -134,7 +130,7 @@ def create_bookmark():
         'bookmark': bookmark.to_dict(user_id=user_id)
     }), 201
 
-# ===================== GET SINGLE BOOKMARK =====================
+# get single bookmark
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['GET'])
 def get_bookmark(bookmark_id):
     bookmark = Bookmark.query.get(bookmark_id)
@@ -143,7 +139,7 @@ def get_bookmark(bookmark_id):
     user_id = request.args.get('user_id', type=int)
     return jsonify(bookmark.to_dict(user_id=user_id)), 200
 
-# ===================== UPDATE BOOKMARK =====================
+# update bookmark
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['PUT'])
 def update_bookmark(bookmark_id):
     data = request.get_json()
@@ -206,7 +202,7 @@ def update_bookmark(bookmark_id):
         'bookmark': bookmark.to_dict(user_id=user_id)
     }), 200
 
-# ===================== TOGGLE ARCHIVE =====================
+# archive toggle
 @bp.route('/bookmarks/<int:bookmark_id>/archive', methods=['PATCH'])
 def toggle_archive(bookmark_id):
     user_id = request.args.get('user_id', type=int)
@@ -226,7 +222,7 @@ def toggle_archive(bookmark_id):
         'archived': ub.archived
     }), 200
 
-# ===================== DELETE BOOKMARK =====================
+# delete bookmark
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['DELETE'])
 def delete_bookmark(bookmark_id):
     user_id = request.args.get('user_id', type=int)
@@ -242,7 +238,7 @@ def delete_bookmark(bookmark_id):
 
     return jsonify({'message': 'Bookmark removed'}), 200
 
-# ===================== EXPORT BOOKMARKS =====================
+# export bookmark
 @bp.route('/export', methods=['GET'])
 def export_bookmarks():
     user_id = request.args.get('user_id', type=int)
@@ -279,7 +275,7 @@ def export_bookmarks():
         headers={"Content-Disposition": f"attachment;filename=linkvault_user{user_id}_{datetime.now().strftime('%Y%m%d')}.html"}
     )
 
-# ===================== LIST TAGS =====================
+# list tags with count
 @bp.route('/tags', methods=['GET'])
 def list_tags():
     user_id = request.args.get('user_id', type=int)
@@ -307,7 +303,8 @@ def list_tags():
     ).all()
 
     return jsonify([{'name': n, 'count': c} for n, c in tags])
-# ===================== LIST BOOKMARKS WITH FILTERING =====================
+
+# list bookmark with filtering
 @bp.route('/bookmarks', methods=['GET'])
 def list_bookmarks():
     user_id = request.args.get('user_id', type=int)
@@ -344,7 +341,7 @@ def list_bookmarks():
         'pages': (total + per_page - 1) // per_page
     })
 
-# ===================== ERROR HANDLERS =====================
+# error handling
 @bp.errorhandler(400)
 def bad_request(e):
     return jsonify({'error': 'Bad Request', 'message': str(e)}), 400
