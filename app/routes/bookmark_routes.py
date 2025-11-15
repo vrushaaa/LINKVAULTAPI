@@ -31,7 +31,7 @@ def extract_title(url):
 # home page route
 @short_bp.route('/')
 def home():
-        return render_template('welcome.html'),200
+    return render_template('landing.html'),200
     
 #bookmark creation route
 @bp.route('/bookmarks', methods=['POST'])

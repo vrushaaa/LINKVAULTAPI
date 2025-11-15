@@ -28,6 +28,10 @@ def create_app():
     app.register_blueprint(bookmarks_bp, url_prefix='/api')
     app.register_blueprint(short_bp)  # Root level
 
+ # ✅ Added below lines for authentication support
+    from app.auth.auth import auth_bp  # added auth blueprint import
+    app.register_blueprint(auth_bp, url_prefix='/auth')  # registered auth blueprint
+    app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")  # added secret key for sessions
     
 
     return app
