@@ -1,6 +1,9 @@
+import base64
+import io
 import os
 import tempfile
 from flask import Blueprint, current_app, render_template, request, jsonify, url_for, redirect
+import segno
 from app import db
 from app.models.bookmark import Bookmark, generate_url_hash, normalize_url
 from app.models.tag import Tag
@@ -105,11 +108,12 @@ def get_bookmark(bookmark_id):
     bookmark = Bookmark.query.get(bookmark_id)
 
     if not bookmark:
+        # return render_template('404.html' , message="Bookmark not found")
         return jsonify({'error': 'Bookmark not found'}), 404
 
     created_ist = bookmark.created_at.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone('Asia/Kolkata'))
 
-    return jsonify({
+    bookmark_data = {
         'id': bookmark.id,
         'url': bookmark.url,
         'short_url': bookmark.short_url,
@@ -119,8 +123,8 @@ def get_bookmark(bookmark_id):
         'archived': bookmark.archived,
         'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
         'tags': [t.name for t in bookmark.tags]
-    }), 200
-
+    }
+    return jsonify({'bookmark': bookmark_data}), 200
 
 # update bookmark
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['PUT'])
@@ -272,17 +276,30 @@ def list_bookmarks():
         )
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    bookmarks = pagination.items
+    return render_template(
+        'home.html', 
+        bookmarks=bookmarks,
+        pagination=pagination,
+        page=page,
+        per_page=per_page,
+        tag=tag,
+        q=q) 
 
-    return jsonify({
-        'bookmarks': [b.to_dict() for b in pagination.items],
-        'pagination': {
-            'page': page,
-            'pages': pagination.pages,
-            'per_page': per_page,
-            'total': pagination.total,
-            'has_next': pagination.has_next,
-            'has_prev': pagination.has_prev,
-            'next_url': url_for('bookmarks_api.list_bookmarks', page=page+1, per_page=per_page, _external=True) if pagination.has_next else None,
-            'prev_url': url_for('bookmarks_api.list_bookmarks', page=page-1, per_page=per_page, _external=True) if pagination.has_prev else None,
-        }
-    })
+
+@bp.route('/bookmarks/<int:bookmark_id>/qr', methods=['GET'])
+def gen_qr(bookmark_id):
+    bookmark = Bookmark.query.get(bookmark_id)
+    if not bookmark:
+        return jsonify({'error': 'Bookmark not found'}), 404
+
+    data = bookmark.url
+    qr = segno.make(data)
+
+    qr_data_uri = qr.png_data_uri(scale=5)
+    qr_title = bookmark.title
+    qr_url = bookmark.url
+
+    return jsonify({'qr_data_uri': qr_data_uri , 'qr_title':qr_title,'qr_url':qr_url}), 200
+
+    # return render_template('qr_page.html', bookmark=bookmark, qr_data_uri=qr_data_uri), 200

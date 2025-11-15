@@ -1,0 +1,28 @@
+{
+  "name": "linkvaultapi",
+  "version": "1.0.0",
+  "description": "**Project Title**: LinkVault API – Bookmark & Tag Management System  \r **Project Description**:  \r Constructed a self-hosted bookmarking API that enables users to save, tag, and retrieve web links programmatically. The system supports duplicate detection, tag-based filtering, and CLI-based import/export in standard formats, functioning as a privacy-focused alternative to commercial bookmarking services.",
+  "main": "index.js",
+  "scripts": {
+    "build:css": "npx tailwindcss -i ./app/static/src/input.css -o ./app/static/dist/output.css --minify",
+    "watch:css": "npx tailwindcss -i ./app/static/src/input.css -o ./app/static/dist/output.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vrushaaa/LINKVAULTAPI.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/vrushaaa/LINKVAULTAPI/issues"
+  },
+  "homepage": "https://github.com/vrushaaa/LINKVAULTAPI#readme",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.17",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17"
+  }
+}

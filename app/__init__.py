@@ -28,6 +28,12 @@ def create_app():
     app.register_blueprint(bookmarks_bp, url_prefix='/api')
     app.register_blueprint(short_bp)  # Root level
 
+    def http_url(url):
+        if url.startswith('http://') or url.startswith('https://'):
+            return url
+        return 'https://' + url
+    app.jinja_env.globals.update(http_url=http_url)
+
     
 
     return app
