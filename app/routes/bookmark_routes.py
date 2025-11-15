@@ -1,3 +1,4 @@
+# app/routes/bookmark_routes.py
 import os
 import tempfile
 from flask import Blueprint, current_app, render_template, request, jsonify, url_for, redirect, Response
@@ -5,7 +6,9 @@ from app import db
 from app.models.bookmark import Bookmark, generate_url_hash, normalize_url
 from app.models.tag import Tag
 from app.models.user import User
-from app.models.user_bookmark import user_bookmarks
+# from app.models.user_bookmark import user_bookmarks, UserBookmark
+from app.models.user_bookmark import UserBookmark
+from app.models.tag_user_bookmark import tag_user_bookmarks
 from urllib.parse import urljoin
 import pytz
 from datetime import datetime
@@ -14,13 +17,27 @@ from bs4 import BeautifulSoup
 
 # Blueprints
 bp = Blueprint('bookmarks_api', __name__, url_prefix='/api')
-short_bp = Blueprint('short', __name__)
+short_bp = Blueprint('short', __name__, url_prefix='/')   # ← FIXED HERE
 
-# ===================== TITLE EXTRACTION (SAFE & ISOLATED) =====================
+# ===================== HOME PAGE =====================
+@short_bp.route('/')
+def home():
+    return render_template('welcome.html'), 200
+
+# ===================== SHORT URL REDIRECT =====================
+@short_bp.route('/<short_code>')
+def redirect_short(short_code):   # ← function name matches endpoint
+    bookmark = Bookmark.query.filter_by(short_url=short_code).first_or_404()
+    bookmark.updated_at = datetime.utcnow()
+    db.session.commit()
+    return redirect(bookmark.url)
+
+# ===================== TITLE EXTRACTION =====================
 def extract_title(url):
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers, timeout=8, verify=False)
+        # ← CHANGE: remove verify=False
+        response = requests.get(url, headers=headers, timeout=8)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         title_tag = soup.find('title')
@@ -28,12 +45,7 @@ def extract_title(url):
     except Exception:
         return None
 
-# ===================== HOME PAGE =====================
-@short_bp.route('/')
-def home():
-    return render_template('welcome.html'), 200
-
-# ===================== CREATE BOOKMARK (FIXED & FINAL) =====================
+# ===================== CREATE BOOKMARK =====================
 @bp.route('/bookmarks', methods=['POST'])
 def create_bookmark():
     data = request.get_json()
@@ -56,39 +68,48 @@ def create_bookmark():
     existing = Bookmark.query.filter_by(hash_url=url_hash).first()
 
     if existing:
-        # Check if user already has it
-        stmt = user_bookmarks.select().where(
-            user_bookmarks.c.user_id == user_id,
-            user_bookmarks.c.bookmark_id == existing.id
+        # ← FIX: use db.select()
+        stmt = db.select(UserBookmark).where(
+            UserBookmark.c.user_id == user_id,
+            UserBookmark.c.bookmark_id == existing.id
         )
         if db.session.execute(stmt).scalar():
             return jsonify({'error': 'You already saved this link'}), 409
         bookmark = existing
     else:
-        bookmark = Bookmark(url=norm_url, notes='', archived=False)
+        bookmark = Bookmark(url=norm_url)
         bookmark.set_hash()
         bookmark.set_short_url()
         db.session.add(bookmark)
         db.session.flush()
 
-        # Auto extract title if not provided and new bookmark
         if not title:
             title = extract_title(norm_url) or "Untitled Link"
-        bookmark.title = title
 
-    # Link user via junction
-    db.session.execute(
-        user_bookmarks.insert().values(
+    # Create or update UserBookmark
+    ub = UserBookmark.query.filter_by(user_id=user_id, bookmark_id=bookmark.id).first()
+    if not ub:
+        ub = UserBookmark(
             user_id=user_id,
             bookmark_id=bookmark.id,
+            title=title,
             notes=notes,
             archived=archived
         )
-    )
+        db.session.add(ub)
+    else:
+        ub.title = title
+        ub.notes = notes
+        ub.archived = archived
 
-    # Handle tags
+    # Handle tags via tag_user_bookmarks (count auto-updated by event)
     if tags:
-        bookmark.tags.clear()
+        db.session.execute(
+            tag_user_bookmarks.delete().where(
+                tag_user_bookmarks.c.bookmark_id == bookmark.id,
+                tag_user_bookmarks.c.user_id == user_id
+            )
+        )
         for tag_name in tags:
             tag_name = tag_name.strip().lower()
             if tag_name:
@@ -96,7 +117,15 @@ def create_bookmark():
                 if not tag:
                     tag = Tag(name=tag_name)
                     db.session.add(tag)
-                bookmark.tags.append(tag)
+                    db.session.flush()
+                db.session.execute(
+                    tag_user_bookmarks.insert().values(
+                        tag_id=tag.id,
+                        user_id=user_id,
+                        bookmark_id=bookmark.id
+                        # ← NO bookmark_count=1
+                    )
+                )
 
     db.session.commit()
 
@@ -111,12 +140,12 @@ def get_bookmark(bookmark_id):
     bookmark = Bookmark.query.get(bookmark_id)
     if not bookmark:
         return jsonify({'error': 'Bookmark not found'}), 404
-    return jsonify(bookmark.to_dict()), 200
+    user_id = request.args.get('user_id', type=int)
+    return jsonify(bookmark.to_dict(user_id=user_id)), 200
 
 # ===================== UPDATE BOOKMARK =====================
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['PUT'])
 def update_bookmark(bookmark_id):
-    # NEVER use or {} — it hides 400 errors
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Invalid or missing JSON'}), 400
@@ -125,52 +154,32 @@ def update_bookmark(bookmark_id):
     if not user_id:
         return jsonify({'error': 'user_id required'}), 400
 
-    # Check ownership
-    link = db.session.execute(
-        user_bookmarks.select().where(
-            user_bookmarks.c.bookmark_id == bookmark_id,
-            user_bookmarks.c.user_id == user_id
-        )
-    ).first()
-
-    if not link:
+    ub = UserBookmark.query.filter_by(user_id=user_id, bookmark_id=bookmark_id).first()
+    if not ub:
         return jsonify({'error': 'Access denied or not found'}), 404
 
     bookmark = Bookmark.query.get(bookmark_id)
     updated = False
 
-    # Update title
     if 'title' in data:
-        bookmark.title = data['title']
+        ub.title = data['title']
         updated = True
 
-    # Update notes in junction table
     if 'notes' in data:
-        db.session.execute(
-            user_bookmarks.update()
-            .where(
-                user_bookmarks.c.bookmark_id == bookmark_id,
-                user_bookmarks.c.user_id == user_id
-            )
-            .values(notes=data['notes'])
-        )
+        ub.notes = data['notes']
         updated = True
 
-    # Update archived in junction table
     if 'archived' in data:
-        db.session.execute(
-            user_bookmarks.update()
-            .where(
-                user_bookmarks.c.bookmark_id == bookmark_id,
-                user_bookmarks.c.user_id == user_id
-            )
-            .values(archived=data['archived'])
-        )
+        ub.archived = data['archived']
         updated = True
 
-    # Update tags
     if 'tags' in data:
-        bookmark.tags.clear()
+        db.session.execute(
+            tag_user_bookmarks.delete().where(
+                tag_user_bookmarks.c.bookmark_id == bookmark_id,
+                tag_user_bookmarks.c.user_id == user_id
+            )
+        )
         for tag_name in data.get('tags', []):
             tag_name = tag_name.strip().lower()
             if tag_name:
@@ -178,17 +187,43 @@ def update_bookmark(bookmark_id):
                 if not tag:
                     tag = Tag(name=tag_name)
                     db.session.add(tag)
-                bookmark.tags.append(tag)
+                    db.session.flush()
+                db.session.execute(
+                    tag_user_bookmarks.insert().values(
+                        tag_id=tag.id,
+                        user_id=user_id,
+                        bookmark_id=bookmark_id
+                    )
+                )
         updated = True
 
-    # ONLY update timestamp if something changed
     if updated:
-        bookmark.updated_at = datetime.utcnow()
+        ub.updated_at = datetime.utcnow()
 
     db.session.commit()
     return jsonify({
         'message': 'Updated',
         'bookmark': bookmark.to_dict(user_id=user_id)
+    }), 200
+
+# ===================== TOGGLE ARCHIVE =====================
+@bp.route('/bookmarks/<int:bookmark_id>/archive', methods=['PATCH'])
+def toggle_archive(bookmark_id):
+    user_id = request.args.get('user_id', type=int)
+    if not user_id:
+        return jsonify({'error': 'user_id required'}), 400
+
+    ub = UserBookmark.query.filter_by(user_id=user_id, bookmark_id=bookmark_id).first()
+    if not ub:
+        return jsonify({'error': 'Not found or access denied'}), 404
+
+    ub.archived = not ub.archived
+    ub.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({
+        'message': 'Archive toggled',
+        'archived': ub.archived
     }), 200
 
 # ===================== DELETE BOOKMARK =====================
@@ -198,66 +233,14 @@ def delete_bookmark(bookmark_id):
     if not user_id:
         return jsonify({'error': 'user_id required'}), 400
 
-    result = db.session.execute(
-        user_bookmarks.delete().where(
-            user_bookmarks.c.bookmark_id == bookmark_id,
-            user_bookmarks.c.user_id == user_id
-        )
-    )
-    db.session.commit()
-
-    if result.rowcount == 0:
+    ub = UserBookmark.query.filter_by(user_id=user_id, bookmark_id=bookmark_id).first()
+    if not ub:
         return jsonify({'error': 'Not found or access denied'}), 404
 
-    return jsonify({'message': 'Bookmark removed'})
-
-# ===================== TOGGLE ARCHIVE =====================
-from sqlalchemy import update, not_, func
-from datetime import datetime
-from app.models.bookmark import Bookmark
-
-@bp.route('/bookmarks/<int:bookmark_id>/archive', methods=['PATCH'])
-def toggle_archive(bookmark_id):
-    user_id = request.args.get('user_id', type=int)
-    if not user_id:
-        return jsonify({'error': 'user_id required'}), 400
-
-    # 1. Toggle archived in user_bookmarks
-    result = db.session.execute(
-        update(user_bookmarks)
-        .where(
-            user_bookmarks.c.bookmark_id == bookmark_id,
-            user_bookmarks.c.user_id == user_id
-        )
-        .values(archived=not_(user_bookmarks.c.archived))
-        .returning(user_bookmarks.c.archived)
-    )
-
-    row = result.fetchone()
-    if not row:
-        return jsonify({'error': 'Not found or access denied'}), 404
-
-    # 2. Update Bookmark.updated_at
-    db.session.execute(
-        update(Bookmark)
-        .where(Bookmark.id == bookmark_id)
-        .values(updated_at=datetime.utcnow())
-    )
-
+    db.session.delete(ub)
     db.session.commit()
 
-    return jsonify({
-        'message': 'Archive toggled',
-        'archived': row[0]
-    })
-
-# ===================== SHORT URL REDIRECT =====================
-@short_bp.route('/<short_code>')
-def redirect_short(short_code):
-    bookmark = Bookmark.query.filter_by(short_url=short_code).first_or_404()
-    bookmark.updated_at = datetime.utcnow()
-    db.session.commit()
-    return redirect(bookmark.url)
+    return jsonify({'message': 'Bookmark removed'}), 200
 
 # ===================== EXPORT BOOKMARKS =====================
 @bp.route('/export', methods=['GET'])
@@ -266,7 +249,7 @@ def export_bookmarks():
     if not user_id:
         return jsonify({'error': 'user_id required'}), 400
 
-    bookmarks = db.session.query(Bookmark).join(user_bookmarks).filter(user_bookmarks.c.user_id == user_id).all()
+    bookmarks = db.session.query(Bookmark).join(UserBookmark).filter(UserBookmark.user_id == user_id).all()
     if not bookmarks:
         return jsonify({'error': 'No bookmarks found'}), 404
 
@@ -278,16 +261,11 @@ def export_bookmarks():
 <DL><p>\n"""
 
     for b in bookmarks:
-        link = db.session.execute(
-            user_bookmarks.select().where(
-                user_bookmarks.c.bookmark_id == b.id,
-                user_bookmarks.c.user_id == user_id
-            )
-        ).first()
-        notes = link.notes if link else ""
+        ub = UserBookmark.query.filter_by(bookmark_id=b.id, user_id=user_id).first()
+        notes = ub.notes if ub else ""
         tags = ",".join(t.name for t in b.tags)
-        title = (b.title or b.url).replace('&', '&amp;').replace('<', '&lt;')
-        created_ist = b.created_at.replace(tzinfo=pytz.UTC).astimezone(ist)
+        title = (ub.title if ub else b.url).replace('&', '&amp;').replace('<', '&lt;')
+        created_ist = (ub.created_at if ub else b.created_at).replace(tzinfo=pytz.UTC).astimezone(ist)
         add_date = int(created_ist.timestamp())
         html += f'    <DT><A HREF="{b.url}" ADD_DATE="{add_date}" TAGS="{tags}">{title}</A>\n'
         if notes:
@@ -308,14 +286,27 @@ def list_tags():
     if not user_id:
         return jsonify({'error': 'user_id required'}), 400
 
-    tags = db.session.query(Tag.name, db.func.count(user_bookmarks.c.bookmark_id).label('count')) \
-        .join(Tag.bookmarks).join(user_bookmarks) \
-        .filter(user_bookmarks.c.user_id == user_id) \
-        .group_by(Tag.name) \
-        .order_by(db.desc('count')).all()
+    # Subquery: max bookmark_count per tag for this user
+    subq = db.select(
+        tag_user_bookmarks.c.tag_id,
+        db.func.max(tag_user_bookmarks.c.bookmark_count).label('cnt')
+    ).where(
+        tag_user_bookmarks.c.user_id == user_id
+    ).group_by(tag_user_bookmarks.c.tag_id).subquery()
+
+    # Join with Tag, filter count > 0
+    tags = db.session.query(
+        Tag.name,
+        subq.c.cnt.label('count')
+    ).join(
+        subq, Tag.id == subq.c.tag_id
+    ).filter(
+        subq.c.cnt > 0
+    ).order_by(
+        db.desc('count'), Tag.name
+    ).all()
 
     return jsonify([{'name': n, 'count': c} for n, c in tags])
-
 # ===================== LIST BOOKMARKS WITH FILTERING =====================
 @bp.route('/bookmarks', methods=['GET'])
 def list_bookmarks():
@@ -329,20 +320,20 @@ def list_bookmarks():
     q = request.args.get('q')
     archived = request.args.get('archived')
 
-    query = db.session.query(Bookmark).join(user_bookmarks).filter(user_bookmarks.c.user_id == user_id)
+    query = db.session.query(Bookmark).join(UserBookmark).filter(UserBookmark.user_id == user_id)
 
     if tag:
-        query = query.join(Bookmark.tags).filter(Tag.name == tag.lower())
+        query = query.join(tag_user_bookmarks).join(Tag).filter(Tag.name == tag.lower())
     if q:
-        query = query.filter(
-            db.or_(Bookmark.title.ilike(f'%{q}%'), Bookmark.url.ilike(f'%{q}%'))
+        query = query.join(UserBookmark).filter(
+            db.or_(UserBookmark.title.ilike(f'%{q}%'), Bookmark.url.ilike(f'%{q}%'))
         )
     if archived is not None:
         archived_bool = archived.lower() == 'true'
-        query = query.filter(user_bookmarks.c.archived == archived_bool)
+        query = query.filter(UserBookmark.archived == archived_bool)
 
     total = query.count()
-    bookmarks = query.order_by(Bookmark.created_at.desc()) \
+    bookmarks = query.order_by(UserBookmark.created_at.desc()) \
                      .offset((page-1)*per_page).limit(per_page).all()
 
     return jsonify({
