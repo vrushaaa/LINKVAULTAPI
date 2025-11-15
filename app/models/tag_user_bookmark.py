@@ -1,4 +1,3 @@
-# app/models/tag_user_bookmark.py
 from app import db
 
 tag_user_bookmarks = db.Table(
