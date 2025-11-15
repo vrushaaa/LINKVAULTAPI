@@ -1,4 +1,6 @@
 from datetime import datetime
+import random
+import string
 
 from flask import url_for
 import pytz
@@ -34,8 +36,8 @@ def generate_url_hash(url: str) -> str:
 class Bookmark(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     url = db.Column(db.String(500), nullable=False)
-    short_url = db.Column(db.String(20), unique=True)  #e.g. x7k9p
-    hash_url = db.Column(db.String(64), unique=True, nullable=False)  #SHA-256
+    short_url = db.Column(db.String(20) )  #e.g. x7k9p
+    hash_url = db.Column(db.String(64), nullable=False)  #SHA-256
     title = db.Column(db.String(200))
     notes = db.Column(db.Text)
     archived = db.Column(db.Boolean, default=False)
@@ -43,7 +45,10 @@ class Bookmark(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # relationships
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
     tags = db.relationship('Tag', secondary=bookmark_tags, back_populates='bookmarks')
+
 
     def set_hash(self):
         self.hash_url = generate_url_hash(self.url)
@@ -56,7 +61,7 @@ class Bookmark(db.Model):
 
     def set_short_url(self):
         self.short_url = self.generate_short_code()
-
+        print(f"Generated short URL: {self.short_url}")
     def __repr__(self):
         return f'<Bookmark {self.short_url or self.url}>'
     
@@ -74,5 +79,4 @@ class Bookmark(db.Model):
             'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
             'tags': [t.name for t in self.tags]
         }
-    
-    # add user 
+

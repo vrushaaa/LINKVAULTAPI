@@ -1,0 +1,16 @@
+<!-- Signup Template -->
+{% extends "base.html" %}
+{% block title %}Register • LinkVault{% endblock %}
+
+{% block content %}
+<div style="text-align:center; max-width: 400px; margin: 0 auto;">
+    <h1>CREATE ACCOUNT</h1>
+    <p>Join LinkVault and save your links forever</p>
+
+    <form method="POST" action="{{ url_for('auth.register') }}">
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <button type="submit">REGISTER</button>
+    </form>
+</div>
+{% endblock %}
