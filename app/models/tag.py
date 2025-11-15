@@ -1,11 +1,28 @@
+# from app import db
+
+# class Tag(db.Model):
+#     id = db.Column(db.Integer, primary_key=True)
+#     name = db.Column(db.String(50), nullable=False, unique=True)
+#     bookmark_count = db.Column(db.Integer, default=0)
+
+#     bookmarks = db.relationship('Bookmark', secondary='bookmark_tags', back_populates='tags')
+
+#     def __repr__(self):
+#         return f'<Tag {self.name}>'
+
+# app/models/tag.py
 from app import db
 
 class Tag(db.Model):
+    __tablename__ = 'tag'
+
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), nullable=False, unique=True)
-    bookmark_count = db.Column(db.Integer, default=0)
+    name = db.Column(db.String(50), unique=True, nullable=False)
 
-    bookmarks = db.relationship('Bookmark', secondary='bookmark_tags', back_populates='tags')
-
-    def __repr__(self):
-        return f'<Tag {self.name}>'
+    # many‑to‑many with bookmarks via tag_user_bookmark
+    bookmarks = db.relationship(
+        'Bookmark',
+        secondary='tag_user_bookmark',
+        back_populates='tags',
+        lazy='dynamic'
+    )
