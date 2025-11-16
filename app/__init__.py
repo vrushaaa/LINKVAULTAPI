@@ -17,8 +17,9 @@ def create_app():
     migrate.init_app(app, db)
 
     # === NOW IMPORT MODELS (after db is ready) ===
-    from app.models.bookmark import Bookmark, bookmark_tags
+    from app.models.bookmark import Bookmark
     from app.models.tag import Tag
+    from app.models.tag_user_bookmark import tag_user_bookmarks
 
     # === REGISTER BLUEPRINTS ===
     from app.routes.bookmark_routes import bp
@@ -36,30 +37,41 @@ def create_app():
 
     @event.listens_for(db.session, "after_flush")
     def update_tag_counts(session, flush_context):
+        """Update Tag.bookmark_count without triggering lazy loads during flush.
+
+        Accessing relationship attributes (like `obj.tags`) can force a
+        flush while a flush is already in progress. Instead, query the
+        association table `tag_user_bookmarks` directly to collect affected
+        tag ids, then update counts using SQL expressions.
+        """
         tag_ids_to_update = set()
 
+        # Collect bookmark IDs from session changes
+        bookmark_ids = set()
         for obj in session.new | session.dirty | session.deleted:
             if isinstance(obj, Bookmark):
-                # Current tags
-                for tag in obj.tags:
-                    tag_ids_to_update.add(tag.id)
+                if obj.id is not None:
+                    bookmark_ids.add(obj.id)
 
-                # If deleted, get old tags from DB
-                if obj in session.deleted:
-                    old_tags = db.session.execute(
-                        db.select(bookmark_tags.c.tag_id)
-                        .where(bookmark_tags.c.bookmark_id == obj.id)
-                    ).scalars().all()
-                    tag_ids_to_update.update(old_tags)
+        if not bookmark_ids:
+            return
 
-        # Update counts
+        # Find tag ids related to these bookmarks from the association table
+        rows = session.execute(
+            db.select(tag_user_bookmarks.c.tag_id)
+            .where(tag_user_bookmarks.c.bookmark_id.in_(bookmark_ids))
+        ).scalars().all()
+
+        tag_ids_to_update.update(rows)
+
+        # Update counts for each affected tag
         for tag_id in tag_ids_to_update:
-            count = db.session.scalar(
+            count = session.scalar(
                 db.select(db.func.count())
-                .select_from(bookmark_tags)
-                .where(bookmark_tags.c.tag_id == tag_id)
+                .select_from(tag_user_bookmarks)
+                .where(tag_user_bookmarks.c.tag_id == tag_id)
             )
-            db.session.execute(
+            session.execute(
                 db.update(Tag)
                 .where(Tag.id == tag_id)
                 .values(bookmark_count=count)
