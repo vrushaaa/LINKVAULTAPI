@@ -1,337 +1,13 @@
-# import os
-# import tempfile
-# from flask import Blueprint, current_app, request, jsonify, url_for, redirect
-# from flask_login import login_required
-# from app import db
-# from app.models.bookmark import Bookmark, generate_url_hash, normalize_url
-# from app.models.tag import Tag
-# from urllib.parse import urljoin
-# #import re
-# import pytz
-# from datetime import datetime
-
-# # parameter checking for all routes
-
-# #blueprints
-# bp = Blueprint('bookmarks_api', __name__)
-# short_bp = Blueprint('short', __name__)
-
-# # title extraction
-# def extract_title(url):
-#     try:
-#         import requests
-#         from bs4 import BeautifulSoup
-#         headers = {'User-Agent': 'Mozilla/5.0'}
-#         response = requests.get(url, headers=headers, timeout=5)
-#         response.raise_for_status()
-#         soup = BeautifulSoup(response.text, 'html.parser')
-#         return soup.title.string.strip() if soup.title else None
-#     except:
-#         return None
-    
-# # home page route
-# @short_bp.route('/')
-# def home():
-#         return """
-#     <h1 style="
-#         color: #c1e328;
-#         font-size: 60px;
-#         text-align: center;
-#         border: 3px solid #c1e328;
-#         display: inline-block;
-#         padding: 20px 40px;
-#         border-radius: 15px;
-#         box-shadow: 0 0 20px rgba(0, 128, 0, 0.5);
-#         margin: 100px auto;
-#     ">
-#         Welcome to LinkVault API
-#     </h1>
-#     <style>
-#         body {
-#             display: flex;
-#             justify-content: center;
-#             align-items: center;
-#             height: 100vh;
-#             background-color: black;
-#         }
-#     </style>
-#     """
-    
-# #bookmark creation route
-# @bp.route('/bookmarks', methods=['POST'])
-# @login_required
-# def create_bookmark():
-#     data = request.get_json() or {}
-#     url = data.get('url')
-#     title = data.get('title')
-#     notes = data.get('notes')
-#     tags = data.get('tags', [])
-#     archived = data.get('archived', False)
-
-#     if not url:
-#         return jsonify({'error': 'URL is required'}), 400
-
-#     norm_url = normalize_url(url)
-#     url_hash = generate_url_hash(url)
-
-#     existing = Bookmark.query.filter_by(hash_url=url_hash).first()
-#     if existing:
-#         short_url = url_for('short.redirect_short', short_code=existing.short_url, _external=True)
-#         return jsonify({
-#             'message': 'URL already exists',
-#             'bookmark': {
-#                 'id': existing.id,
-#                 'url': existing.url,
-#                 'short_url': existing.short_url,
-#                 'full_short_url': short_url
-#             }
-#         }), 409
-
-#     bookmark = Bookmark(url=norm_url, notes=notes, archived=archived)
-#     bookmark.set_hash()
-#     bookmark.set_short_url()
-
-#     if not title:
-#         title = extract_title(norm_url)
-#     bookmark.title = title
-
-#     for tag_name in tags:
-#         tag_name = tag_name.strip().lower()
-#         if tag_name:
-#             tag = Tag.query.filter_by(name=tag_name).first()
-#             if not tag:
-#                 tag = Tag(name=tag_name)
-#                 db.session.add(tag)
-#             bookmark.tags.append(tag)
-
-#     db.session.add(bookmark)
-#     db.session.commit()
-
-#     short_url = url_for('short.redirect_short', short_code=bookmark.short_url, _external=True)
-#     ist_time = bookmark.created_at.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone('Asia/Kolkata'))
-
-#     return jsonify({
-#         'message': 'Bookmark created',
-#         'bookmark': {
-#             'id': bookmark.id,
-#             'url': bookmark.url,
-#             'short_url': bookmark.short_url,
-#             'full_short_url': short_url,
-#             'title': bookmark.title,
-#             'created_at': ist_time.strftime('%Y-%m-%d %H:%M:%S IST'),
-#             'tags': [t.name for t in bookmark.tags]
-#         }
-#     }), 201
-
-
-# #display bookmark by id if exists
-# @bp.route('/bookmarks/<int:bookmark_id>', methods=['GET'])
-# @login_required
-# def get_bookmark(bookmark_id):
-#     bookmark = Bookmark.query.get(bookmark_id)
-
-#     if not bookmark:
-#         return jsonify({'error': 'Bookmark not found'}), 404
-
-#     created_ist = bookmark.created_at.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone('Asia/Kolkata'))
-
-#     return jsonify({
-#         'id': bookmark.id,
-#         'url': bookmark.url,
-#         'short_url': bookmark.short_url,
-#         'full_short_url': url_for('short.redirect_short', short_code=bookmark.short_url, _external=True),
-#         'title': bookmark.title,
-#         'notes': bookmark.notes,
-#         'archived': bookmark.archived,
-#         'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
-#         'tags': [t.name for t in bookmark.tags]
-#     }), 200
-
-
-# # update bookmark
-# @bp.route('/bookmarks/<int:bookmark_id>', methods=['PUT'])
-# @login_required
-# def update_bookmark(bookmark_id):
-#     bookmark = Bookmark.query.get_or_404(bookmark_id)
-#     data = request.get_json() or {}
-
-#     if 'title' in data:
-#         bookmark.title = data['title']
-#     if 'notes' in data:
-#         bookmark.notes = data['notes']
-#     if 'archived' in data:
-#         bookmark.archived = data['archived']
-#     if 'tags' in data:
-#         bookmark.tags = []
-#         for tag_name in data['tags']:
-#             tag_name = tag_name.strip().lower()
-#             if tag_name:
-#                 tag = Tag.query.filter_by(name=tag_name).first()
-#                 if not tag:
-#                     tag = Tag(name=tag_name)
-#                     db.session.add(tag)
-#                 bookmark.tags.append(tag)
-
-#     db.session.commit()
-
-#     return jsonify({
-#         'message': 'Bookmark updated',
-#         'bookmark': {
-#             'id': bookmark.id,
-#             'url': bookmark.url,
-#             'short_url': bookmark.short_url,
-#             'full_short_url': url_for('short.redirect_short', short_code=bookmark.short_url, _external=True),
-#             'title': bookmark.title,
-#             'notes': bookmark.notes,
-#             'archived': bookmark.archived,
-#             'tags': [t.name for t in bookmark.tags]
-#         }
-#     }), 200
-
-# # delete Bookmark using id
-# @bp.route('/bookmarks/<int:bookmark_id>', methods=['DELETE'])
-# @login_required
-# def delete_bookmark(bookmark_id):
-#     bookmark = Bookmark.query.get_or_404(bookmark_id)
-#     db.session.delete(bookmark)
-#     db.session.commit()
-#     return jsonify({'message': 'Bookmark deleted'}), 200
-
-
-# # toggle archive status
-# @bp.route('/bookmarks/<int:bookmark_id>/archive', methods=['PATCH'])
-# @login_required
-# def toggle_archive(bookmark_id):
-#     bookmark = Bookmark.query.get_or_404(bookmark_id)
-#     bookmark.archived = not bookmark.archived
-#     db.session.commit()
-
-#     return jsonify({
-#         'message': 'Archive status toggled',
-#         'bookmark': {
-#             'id': bookmark.id,
-#             'url': bookmark.url,
-#             'short_url': bookmark.short_url,
-#             'full_short_url': url_for('short.redirect_short', short_code=bookmark.short_url, _external=True),
-#             'archived': bookmark.archived
-#         }
-#     }), 200
-
-# #  url-shortner
-# @short_bp.route('/<short_code>')
-# @login_required
-# def redirect_short(short_code):
-#     bookmark = Bookmark.query.filter_by(short_url=short_code).first_or_404()
-#     bookmark.updated_at = db.func.now()
-#     db.session.commit()
-#     return redirect(bookmark.url)
-
-# # export bookmarks as HTML
-# @login_required
-# @bp.route('/export', methods=['GET'])
-# def export_bookmarks():
-#     bookmarks = Bookmark.query.all()
-#     if not bookmarks:
-#         return jsonify({'error': 'No bookmarks to export'}), 404
-
-#     ist = pytz.timezone('Asia/Kolkata')
-
-#     with tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8') as tmpfile:
-#         tmpfile.write('<!DOCTYPE NETSCAPE-Bookmark-file-1>\n')
-#         tmpfile.write('<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n')
-#         tmpfile.write('<TITLE>LinkVault Bookmarks</TITLE>\n')
-#         tmpfile.write('<H1>LinkVault Bookmarks</H1>\n')
-#         tmpfile.write('<DL><p>\n')
-
-#         for b in bookmarks:
-#             created_ist = b.created_at.replace(tzinfo=pytz.UTC).astimezone(ist)
-#             add_date = int(created_ist.timestamp())
-
-#             title = (b.title or b.url)
-#             title = title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-
-#             tmpfile.write(f'    <DT><A HREF="{b.url}" ADD_DATE="{add_date}">{title}</A>\n')
-#             if b.notes:
-#                 notes = b.notes.replace('&', '&amp;').replace('<', '&lt;')
-#                 tmpfile.write(f'    <DD>{notes}\n')
-
-#         tmpfile.write('</DL><p>\n')
-
-#     return_data = None
-#     with open(tmpfile.name, 'rb') as f:
-#         return_data = f.read()
-#     os.unlink(tmpfile.name)
-
-#     response = current_app.response_class(
-#         response=return_data,
-#         status=200,
-#         mimetype='text/html'
-#     )
-#     response.headers.set('Content-Disposition', 'attachment', filename='linkvault_bookmarks.html')
-#     return response
-
-# # filtering by tag if else logic to be applied
-# # updated filter by id route
-# @bp.route('/bookmarks/', methods=['GET'])
-# @login_required
-# def list_bookmarks():
-#     page = request.args.get('page', 1, type=int)
-#     per_page = request.args.get('per_page', 5, type=int)
-#     tag = request.args.get('tag')
-#     q = request.args.get('q')
-#     archived_param = request.args.get('archived')
-#     bookmark_id = request.args.get('id', type=int)
-
-#     query = Bookmark.query
-
-#     if archived_param is not None:
-#         archived = archived_param.lower() == 'true'
-#         query = query.filter_by(archived=archived)
-
-#     # here 
-#     if tag:
-#         tags_list = [t.strip() for t in tag.split(",") if t.strip()]
-#         for t in tags_list:
-#             query = query.filter(Bookmark.tags.any(Tag.name == t))
-
-#     if q:
-#         search = f"%{q}%"
-#         query = query.filter(
-#             db.or_(
-#                 Bookmark.title.ilike(search),
-#                 Bookmark.url.ilike(search)
-#             )
-#         )
-
-#     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-
-#     return jsonify({
-#         'bookmarks': [b.to_dict() for b in pagination.items],
-#         'pagination': {
-#             'page': page,
-#             'pages': pagination.pages,
-#             'per_page': per_page,
-#             'total': pagination.total,
-#             'has_next': pagination.has_next,
-#             'has_prev': pagination.has_prev,
-#             'next_url': url_for('bookmarks_api.list_bookmarks', page=page+1, per_page=per_page, _external=True) if pagination.has_next else None,
-#             'prev_url': url_for('bookmarks_api.list_bookmarks', page=page-1, per_page=per_page, _external=True) if pagination.has_prev else None,
-#         }
-#     })
-
-
-
 import os
 import tempfile
-<<<<<<< Updated upstream
-from flask import Blueprint, current_app, render_template, request, jsonify, url_for, redirect
-=======
 from flask import Blueprint, current_app, flash, render_template, request, jsonify, url_for, redirect
 from flask_login import login_required, current_user  # ← ADD THIS
->>>>>>> Stashed changes
 from app import db
 from app.models.bookmark import Bookmark, generate_url_hash, normalize_url
 from app.models.tag import Tag
+from app.models.user import User
+from app.models.user_bookmark import UserBookmark
+from app.models.tag_user_bookmark import tag_user_bookmarks
 from urllib.parse import urljoin
 import pytz
 from datetime import datetime
@@ -342,24 +18,18 @@ short_bp = Blueprint('short', __name__)
 # Title extraction
 def extract_title(url):
     try:
-        import requests
-        from bs4 import BeautifulSoup
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=5)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(url, headers=headers, timeout=8)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-        return soup.title.string.strip() if soup.title else None
-    except:
+        title_tag = soup.find('title')
+        return title_tag.get_text(strip=True) if title_tag else None
+    except Exception:
         return None
 
 # Home page
 @short_bp.route('/')
 def home():
-<<<<<<< Updated upstream
-        return render_template('welcome.html'),200
-    
-#bookmark creation route
-=======
     return render_template('home.html')
 
 # CREATE BOOKMARK — SECURE
@@ -467,7 +137,6 @@ def create_bookmark_get():
 
 
 # In bookmark_routes.py
->>>>>>> Stashed changes
 @bp.route('/bookmarks', methods=['POST'])
 @login_required
 def create_bookmark():
@@ -617,15 +286,31 @@ def update_bookmark(bookmark_id):
     if 'notes' in data: bookmark.notes = data['notes']
     if 'archived' in data: bookmark.archived = data['archived']
     if 'tags' in data:
-        bookmark.tags = []
-        for tag_name in data['tags']:
+        db.session.execute(
+            tag_user_bookmarks.delete().where(
+                tag_user_bookmarks.c.bookmark_id == bookmark_id,
+                tag_user_bookmarks.c.user_id == user_id
+            )
+        )
+        for tag_name in data.get('tags', []):
             tag_name = tag_name.strip().lower()
             if tag_name:
                 tag = Tag.query.filter_by(name=tag_name).first()
                 if not tag:
                     tag = Tag(name=tag_name)
                     db.session.add(tag)
-                bookmark.tags.append(tag)
+                    db.session.flush()
+                db.session.execute(
+                    tag_user_bookmarks.insert().values(
+                        tag_id=tag.id,
+                        user_id=user_id,
+                        bookmark_id=bookmark_id
+                    )
+                )
+        updated = True
+
+    if updated:
+        ub.updated_at = datetime.utcnow()
 
     db.session.commit()
     return jsonify({'message': 'Bookmark updated'}), 200
@@ -671,7 +356,8 @@ def redirect_short(short_code):
     bookmark = Bookmark.query.filter_by(short_url=short_code).first_or_404()
     bookmark.updated_at = db.func.now()
     db.session.commit()
-    return redirect(bookmark.url)
+
+    return jsonify({'message': 'Bookmark removed'}), 200
 
 
 # LIST BOOKMARKS — SECURE + FILTERS
@@ -826,7 +512,7 @@ def list_bookmarks():
 def export_bookmarks():
     bookmarks = Bookmark.query.filter_by(user_id=current_user.id).all()  # ← SECURE
     if not bookmarks:
-        return jsonify({'error': 'No bookmarks to export'}), 404
+        return jsonify({'error': 'No bookmarks found'}), 404
 
     ist = pytz.timezone('Asia/Kolkata')
     with tempfile.NamedTemporaryFile(delete=False, mode='w', encoding='utf-8') as tmpfile:

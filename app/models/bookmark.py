@@ -1,43 +1,26 @@
 from datetime import datetime
-import random
-import string
 
 from flask import url_for
-import pytz
-from app import db
-import hashlib
-from urllib.parse import urlparse, urlunparse
 
-# association table for many-to-many
-bookmark_tags = db.Table(
-    'bookmark_tags',
-    db.Column('bookmark_id', db.Integer, db.ForeignKey('bookmark.id'), primary_key=True),
-    db.Column('tag_id', db.Integer, db.ForeignKey('tag.id'), primary_key=True)
-)
+def generate_short_code(length: int = 6) -> str:
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 def normalize_url(url: str) -> str:
-    """Normalize URL for hashing and deduplication."""
     parsed = urlparse(url)
-    normalized = urlunparse((
-        parsed.scheme.lower(),
-        parsed.netloc.lower(),
-        parsed.path,
-        parsed.params,
-        parsed.query,
-        ''  # no fragment
-    ))
-    return normalized
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}".rstrip('/')
 
 def generate_url_hash(url: str) -> str:
-    """Generate SHA-256 hash of normalized URL."""
-    norm_url = normalize_url(url)
-    return hashlib.sha256(norm_url.encode('utf-8')).hexdigest()
+    import hashlib
+    return hashlib.sha256(url.encode()).hexdigest()[:16]
 
 class Bookmark(db.Model):
+    __tablename__ = 'bookmark'
+
     id = db.Column(db.Integer, primary_key=True)
     url = db.Column(db.String(500), nullable=False)
-    short_url = db.Column(db.String(20) )  #e.g. x7k9p
-    hash_url = db.Column(db.String(64), nullable=False)  #SHA-256
+    short_url = db.Column(db.String(20), unique=True)  #e.g. x7k9p
+    hash_url = db.Column(db.String(64), unique=True, nullable=False)  #SHA-256
     title = db.Column(db.String(200))
     notes = db.Column(db.Text)
     archived = db.Column(db.Boolean, default=False)
@@ -45,23 +28,14 @@ class Bookmark(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # relationships
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-
     tags = db.relationship('Tag', secondary=bookmark_tags, back_populates='bookmarks')
-
 
     def set_hash(self):
         self.hash_url = generate_url_hash(self.url)
 
-    def generate_short_code(self):
-        """Generate 6-char short code from hash."""
-        import base64
-        short = base64.urlsafe_b64encode(bytes.fromhex(self.hash_url[:12])).decode('utf-8').rstrip('=')
-        return short[:6]
-
     def set_short_url(self):
         self.short_url = self.generate_short_code()
-        print(f"Generated short URL: {self.short_url}")
+
     def __repr__(self):
         return f'<Bookmark {self.short_url or self.url}>'
     
@@ -71,12 +45,10 @@ class Bookmark(db.Model):
         return {
             'id': self.id,
             'url': self.url,
+            'hash_url': self.hash_url,
             'short_url': self.short_url,
             'full_short_url': url_for('short.redirect_short', short_code=self.short_url, _external=True),
-            'title': self.title,
-            'notes': self.notes,
-            'archived': self.archived,
-            'created_at': created_ist.strftime('%Y-%m-%d %H:%M:%S IST'),
             'tags': [t.name for t in self.tags]
         }
-
+    
+    # add user 
