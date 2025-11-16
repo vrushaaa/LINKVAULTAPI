@@ -43,6 +43,9 @@ def extract_title(url):
         return None
 
 # create bookmark
+    return render_template('landing.html'),200
+    
+#bookmark creation route
 @bp.route('/bookmarks', methods=['POST'])
 def create_bookmark():
     data = request.get_json()

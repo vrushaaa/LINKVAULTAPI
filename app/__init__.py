@@ -73,5 +73,10 @@ def create_app():
                 )
                 .values(bookmark_count=count)
             )
+ # ✅ Added below lines for authentication support
+    from app.auth.auth import auth_bp  # added auth blueprint import
+    app.register_blueprint(auth_bp, url_prefix='/auth')  # registered auth blueprint
+    app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")  # added secret key for sessions
+    
 
     return app

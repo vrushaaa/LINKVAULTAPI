@@ -48,7 +48,7 @@ def create(url, title, notes, tags, archived):
         "url": url,
         "title": title or None,
         "notes": notes or None,
-        "tags": tags or None,
+        "tags": tags or None,   
         "archived": archived,
     }
     r = requests.post(f"{BASE_URL}/api/bookmarks", json=payload)
