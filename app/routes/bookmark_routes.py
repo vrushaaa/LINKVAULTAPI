@@ -109,7 +109,7 @@ def get_bookmark(bookmark_id):
 
     if not bookmark:
         # return render_template('404.html' , message="Bookmark not found")
-        return jsonify({'error': 'Bookmark not found'}), 404
+        return render_template('noBookmark.html'), 404
 
     created_ist = bookmark.created_at.replace(tzinfo=pytz.UTC).astimezone(pytz.timezone('Asia/Kolkata'))
 
