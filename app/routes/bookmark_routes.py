@@ -20,7 +20,7 @@ short_bp = Blueprint('short', __name__, url_prefix='/')
 # home page
 @short_bp.route('/')
 def home():
-    return render_template('welcome.html'), 200
+    return render_template('landing.html'), 200
 
 # short url redirect
 @short_bp.route('/<short_code>')
@@ -42,8 +42,6 @@ def extract_title(url):
     except Exception:
         return None
 
-# create bookmark
-    return render_template('landing.html'),200
     
 #bookmark creation route
 @bp.route('/bookmarks', methods=['POST'])

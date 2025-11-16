@@ -2,7 +2,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from config import Config
-
+import os
 db = SQLAlchemy()
 migrate = Migrate()
 
@@ -28,10 +28,10 @@ def create_app():
     app.register_blueprint(user_bp, url_prefix='/api/users')
     app.register_blueprint(short_bp)
 
-    @app.route('/')
-    def welcome():
-        from flask import render_template
-        return render_template('welcome.html'), 200
+    # @app.route('/')
+    # def welcome():
+    #     from flask import render_template
+    #     return render_template('landing.html'), 200
 
     # auto update tag_user_bookmark.bookmark_count
     from sqlalchemy import event
