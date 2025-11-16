@@ -1,37 +1,32 @@
-import os
-from flask import Flask
+# app/__init__.py
+from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from config import Config
 
+# === DECLARE db & migrate FIRST ===
 db = SQLAlchemy()
 migrate = Migrate()
 
 def create_app():
     app = Flask(__name__)
-
-    # loading config
-    from config import Config
     app.config.from_object(Config)
 
-    #initializing
+    # === INIT EXTENSIONS ===
     db.init_app(app)
     migrate.init_app(app, db)
 
+    # === NOW IMPORT MODELS (after db is ready) ===
+    from app.models.bookmark import Bookmark, bookmark_tags
+    from app.models.tag import Tag
 
-    # importing models to register with SQLAlchemy
-    from app.models.bookmark import Bookmark  
-    from app.models.tag import Tag      
-
-    from app.routes.bookmark_routes import bp as bookmarks_bp
+    # === REGISTER BLUEPRINTS ===
+    from app.routes.bookmark_routes import bp
     from app.routes.bookmark_routes import short_bp
 
     app.register_blueprint(bookmarks_bp, url_prefix='/api')
     app.register_blueprint(short_bp)  # Root level
 
- # ✅ Added below lines for authentication support
-    from app.auth.auth import auth_bp  # added auth blueprint import
-    app.register_blueprint(auth_bp, url_prefix='/auth')  # registered auth blueprint
-    app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")  # added secret key for sessions
     
 
     return app
