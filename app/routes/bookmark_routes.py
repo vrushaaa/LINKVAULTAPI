@@ -1,6 +1,7 @@
 import os
 import tempfile
 from flask import Blueprint, current_app, render_template, request, jsonify, url_for, redirect, Response
+from flask_login import login_required
 from app import db
 from app.models.bookmark import Bookmark, generate_url_hash, normalize_url
 from app.models.tag import Tag
@@ -20,7 +21,7 @@ short_bp = Blueprint('short', __name__, url_prefix='/')
 # home page
 @short_bp.route('/')
 def home():
-    return render_template('welcome.html'), 200
+    return render_template('landing.html'), 200
 
 # short url redirect
 @short_bp.route('/<short_code>')
@@ -42,8 +43,13 @@ def extract_title(url):
     except Exception:
         return None
 
-# create bookmark
+@bp.route('/', methods=['GET'])
+def dashboard():
+    return render_template('landing.html'), 200
+
+#bookmark creation route
 @bp.route('/bookmarks', methods=['POST'])
+@login_required
 def create_bookmark():
     data = request.get_json()
     url = data.get('url')
@@ -132,6 +138,7 @@ def create_bookmark():
 
 # get single bookmark
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['GET'])
+@login_required
 def get_bookmark(bookmark_id):
     bookmark = Bookmark.query.get(bookmark_id)
     if not bookmark:
@@ -204,6 +211,7 @@ def update_bookmark(bookmark_id):
 
 # archive toggle
 @bp.route('/bookmarks/<int:bookmark_id>/archive', methods=['PATCH'])
+@login_required
 def toggle_archive(bookmark_id):
     user_id = request.args.get('user_id', type=int)
     if not user_id:
@@ -224,6 +232,7 @@ def toggle_archive(bookmark_id):
 
 # delete bookmark
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['DELETE'])
+@login_required
 def delete_bookmark(bookmark_id):
     user_id = request.args.get('user_id', type=int)
     if not user_id:
@@ -240,6 +249,7 @@ def delete_bookmark(bookmark_id):
 
 # export bookmark
 @bp.route('/export', methods=['GET'])
+@login_required
 def export_bookmarks():
     user_id = request.args.get('user_id', type=int)
     if not user_id:
@@ -306,6 +316,7 @@ def list_tags():
 
 # list bookmark with filtering
 @bp.route('/bookmarks', methods=['GET'])
+@login_required
 def list_bookmarks():
     user_id = request.args.get('user_id', type=int)
     if not user_id:

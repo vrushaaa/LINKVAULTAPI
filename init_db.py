@@ -1,5 +1,5 @@
 """
-LinkVault Dummy Data Initializer (Auth-Ready)
+LinkVault Dummy Data Initializer (Auth‑Ready)
 Run:  python init_db.py
 """
 
@@ -40,7 +40,7 @@ DUMMY_BOOKMARKS = [
     {"url": "https://cloud.google.com",         "title": "Google Cloud",         "notes": "GCP",                   "tags": ["cloud", "gcp"],         "archived": False},
     {"url": "https://mongodb.com",              "title": "MongoDB",              "notes": "NoSQL DB",              "tags": ["database", "nosql"],    "archived": False},
     {"url": "https://postgresql.org",           "title": "PostgreSQL",           "notes": "Relational DB",         "tags": ["database", "sql"],      "archived": False},
-    {"url": "https://redis.io",                 "title": "Redis",                "notes": "In-memory DB",          "tags": ["database", "cache"],    "archived": False},
+    {"url": "https://redis.io",                 "title": "Redis",                "notes": "In‑memory DB",          "tags": ["database", "cache"],    "archived": False},
     {"url": "https://rabbitmq.com",             "title": "RabbitMQ",             "notes": "Message broker",        "tags": ["mq", "devops"],         "archived": False},
     {"url": "https://jenkins.io",               "title": "Jenkins",              "notes": "CI/CD tool",            "tags": ["ci", "cd"],             "archived": False},
 ] + [
@@ -51,7 +51,6 @@ DUMMY_BOOKMARKS = [
      "archived": False}
     for i in range(1, 21)
 ]
-
 
 # ----------------------------------------------------------------------
 def init_db_with_data():
@@ -71,29 +70,26 @@ def init_db_with_data():
                 name=ud["name"],
                 email=ud["email"]
             )
-            user.set_password("password123")
+            user.set_password("password123")   # same password for demo
             db.session.add(user)
-            db.session.flush()  # safe here
+            db.session.flush()
             users.append(user)
             print(f"  → {user.username} (id={user.id})")
 
-        # ------------------- BOOKMARKS -------------------
+        # ------------------- BOOKMARKS & TAGS -------------------
         bookmarks = []
         print(f"\nAdding {len(DUMMY_BOOKMARKS)} bookmarks...")
         for item in DUMMY_BOOKMARKS:
             norm = normalize_url(item["url"])
             h = generate_url_hash(norm)
 
-            # ⛔ PREVENT NESTED FLUSH: Wrap queries in no_autoflush
-            with db.session.no_autoflush:
-                bm = Bookmark.query.filter_by(hash_url=h).first()
-
+            bm = Bookmark.query.filter_by(hash_url=h).first()
             if not bm:
                 bm = Bookmark(url=norm)
                 bm.set_hash()
                 bm.set_short_url()
                 db.session.add(bm)
-                db.session.flush()  # this is OK
+                db.session.flush()
 
             bookmarks.append(bm)
 
@@ -120,21 +116,14 @@ def init_db_with_data():
                 )
                 db.session.add(ub)
 
-                # Add tags
                 if src:
                     for tname in src["tags"]:
                         tname = tname.lower()
-
-                        # ⛔ PREVENT AUTOFLUSH WHEN QUERYING TAG
-                        with db.session.no_autoflush:
-                            tag = Tag.query.filter_by(name=tname).first()
-
+                        tag = Tag.query.filter_by(name=tname).first()
                         if not tag:
                             tag = Tag(name=tname)
                             db.session.add(tag)
                             db.session.flush()
-
-                        # Insert into association table
                         db.session.execute(
                             tag_user_bookmarks.insert().values(
                                 tag_id=tag.id,
@@ -142,7 +131,6 @@ def init_db_with_data():
                                 bookmark_id=bm.id
                             )
                         )
-
         db.session.commit()
         print("Assignment complete – tag counts auto-updated by after_flush")
 
@@ -151,8 +139,7 @@ def init_db_with_data():
         print("Sample curl commands:")
         for u in users:
             print(f'curl "http://127.0.0.1:5000/api/bookmarks?user_id={u.id}"')
-
-        print("\nLogin:")
+        print("\nLogin (Flask‑Login ready):")
         for u in users:
             print(f'curl -X POST http://127.0.0.1:5000/auth/login '
                   f'-H "Content-Type: application/json" '
