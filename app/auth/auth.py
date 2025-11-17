@@ -1,12 +1,103 @@
 # app/routes/auth.py
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_dance.contrib.google import google
 from flask_dance.contrib.github import github
+from itsdangerous import URLSafeTimedSerializer
 from app import db, bcrypt
 from app.models.user import User
+from flask_mail import Message
+from app import mail
 
 auth = Blueprint('auth', __name__)
+
+def generate_reset_token(user):
+    s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+    return s.dumps({"user_id": user.id})
+
+def verify_reset_token(token, expiration=3600):
+    s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+    try:
+        data = s.loads(token, max_age=expiration)
+        return User.query.get(data["user_id"])
+    except Exception:
+        return None
+
+def send_reset_email(user):
+    token = generate_reset_token(user)
+    reset_url = url_for("auth.reset_password", token=token, _external=True)
+
+    msg = Message(
+        subject="Reset Your Password - LinkVault",
+        sender=current_app.config["MAIL_USERNAME"],
+        recipients=[user.email]
+    )
+
+    msg.body = f"""
+Hi {user.username},
+
+Click the link below to reset your password:
+
+{reset_url}
+
+If you did not request this, simply ignore this message.
+
+LinkVault Security Team
+"""
+
+    mail.send(msg)
+
+@auth.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = request.form.get("email")
+
+        if not email:
+            flash("Email is required.", "error")
+            return redirect(url_for("auth.forgot_password"))
+
+        user = User.query.filter_by(email=email.lower().strip()).first()
+
+        if user:
+            send_reset_email(user)
+            flash("A password reset link has been sent to your email.", "success")
+            return redirect(url_for("auth.login"))
+
+        flash("No account found with that email.", "error")
+        return redirect(url_for("auth.forgot_password"))
+
+    return render_template("forgot_password.html")
+
+
+@auth.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    user = verify_reset_token(token)
+
+    if user is None:
+        flash("Invalid or expired reset link.", "error")
+        return redirect(url_for("auth.forgot_password"))
+
+    if request.method == "POST":
+        new_password = request.form.get("password")
+
+        if not new_password:
+            flash("Password cannot be empty.", "error")
+            return redirect(url_for("auth.reset_password", token=token))
+
+        user.set_password(new_password)
+        db.session.commit()
+
+        flash("Your password has been reset successfully!", "success")
+        return redirect(url_for("auth.login"))
+
+    return render_template("reset_password.html", token=token)
+
+
+
+
+
+
+
 
 # REGISTER 
 @auth.route('/signup', methods=['GET', 'POST'])
@@ -181,130 +272,6 @@ def login_github():
     return redirect(url_for('auth.oauth_callback', provider='github'))
 
 
-@auth.route("/forgot-password", methods=["GET", "POST"])
-def forgot_password():
-    if request.method == "POST":
-        email = request.form.get("email")
-
-        # TODO: Add logic to:
-        # 1. Verify user exists
-        # 2. Send reset email or generate reset token
-        print("Password reset requested for:", email)
-
-        flash("If this email exists, a reset link has been sent.", "info")
-        return redirect(url_for("auth.login"))
-
-    return render_template("forgot_password.html")
-
-
-# @auth.route('/auth/<provider>/callback')
-# def oauth_callback(provider):
-#     if provider not in ['google', 'github']:
-#         flash('Invalid provider', 'error')
-#         return redirect(url_for('auth.login'))
-
-#     oauth = google if provider == 'google' else github
-
-#     if not oauth.authorized:
-#         flash(f'{provider.title()} login failed', 'error')
-#         return redirect(url_for('auth.login'))
-
-#     # === GET USER INFO ===
-#     if provider == 'google':
-#         resp = oauth.get("/oauth2/v1/userinfo")
-#         if not resp.ok:
-#             flash('Failed to fetch user info', 'error')
-#             return redirect(url_for('auth.login'))
-#         data = resp.json()
-#         email = data['email']
-#         full_name = data.get('name', '')
-#         username = data['email'].split('@')[0]
-
-#     else:  # GitHub
-#         resp = oauth.get("/user")
-#         if not resp.ok:
-#             flash('Failed to fetch GitHub user', 'error')
-#             return redirect(url_for('auth.login'))
-#         user_data = resp.json()
-#         email_resp = oauth.get("/user/emails")
-#         email = None
-#         if email_resp.ok:
-#             emails = email_resp.json()
-#             primary = next((e for e in emails if e['primary']), emails[0])
-#             email = primary['email']
-#         full_name = user_data.get('name', user_data['login'])
-#         username = user_data['login']
-
-#     if not email:
-#         flash('Could not retrieve email', 'error')
-#         return redirect(url_for('auth.login'))
-
-#     # === FIND OR CREATE USER ===
-#     user = User.query.filter_by(email=email).first()
-#     if not user:
-#         user = User(
-#             full_name=full_name or username,
-#             email=email,
-#             username=username
-#         )
-#         user.set_password('oauth-' + str(user.id))  # Dummy password
-#         db.session.add(user)
-#         db.session.commit()
-#         flash('Account created via ' + provider.title() + '!', 'success')
-#     else:
-#         flash('Logged in via ' + provider.title() + '!', 'success')
-
-#     login_user(user)
-#     return redirect(url_for('bookmarks_api.dashboard'))
-
-
-
-
-
-
-
-
-
-# # auth.py
-# from flask import Blueprint, render_template, request, flash, redirect, url_for
-# from flask_wtf import FlaskForm
-# from wtforms import StringField, PasswordField, SubmitField
-# from wtforms.validators import DataRequired, Email
-
-# bp = Blueprint('auth', __name__, template_folder='templates')
-
-# class LoginForm(FlaskForm):
-#     email    = StringField('Email', validators=[DataRequired(), Email()])
-#     password = PasswordField('Password', validators=[DataRequired()])
-#     submit   = SubmitField('Login')
-
-# @bp.route('/login', methods=['GET', 'POST'])
-# def login():
-#     form = LoginForm()
-#     if form.validate_on_submit():
-#         # TODO: verify credentials
-#         flash('Logged in successfully!', 'success')
-#         return redirect(url_for('dashboard.index'))
-#     return render_template('login.html', form=form)
-
-
-
-# # ✅ Added below lines for integration with create_app and logout functionality
-# auth_bp = bp  # alias for blueprint to match create_app import  # added line
-
-# from flask import session  # added for session handling
-
-# @auth_bp.route('/logout')  # new logout route
-# def logout():
-#     session.clear()  # clear session data
-#     flash('You have been logged out.', 'info')  # flash message
-#     return redirect(url_for('auth.login'))  # redirect to login
-
-# @bp.route('/signup', methods=['GET', 'POST'])
-# def signup():
-#     # You can later add real registration logic here
-#     return render_template('signup.html')  # create this template next
-
 
 
 @auth.errorhandler(400)
@@ -322,3 +289,126 @@ def conflict(e):
 @auth.errorhandler(500)
 def internal_error(e):
     return jsonify({'error': 'Internal Server Error', 'message': 'Something went wrong'}), 500
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# @auth.route("/forgot-password", methods=["GET", "POST"])
+# def forgot_password():
+#     if current_user.is_authenticated:
+#         return redirect(url_for('bookmarks_api.dashboard'))
+    
+#     if request.method == "POST":
+#         email = request.form.get("email")
+        
+#         if not email:
+#             flash("Email is required", "error")
+#             return render_template("forgot_password.html")
+        
+#         user = User.query.filter_by(email=email.lower()).first()
+        
+#         if user:
+#             # Generate reset token
+#             token = user.generate_reset_token()
+            
+#             # Create reset URL
+#             reset_url = url_for('auth.reset_password', token=token, _external=True)
+            
+#             # Send email
+#             try:
+#                 msg = Message(
+#                     'Password Reset Request - LinkVault',
+#                     recipients=[user.email]
+#                 )
+#                 msg.body = f'''Hello {user.name},
+
+# You requested a password reset for your LinkVault account.
+
+# Click the link below to reset your password:
+# {reset_url}
+
+# This link will expire in 1 hour.
+
+# If you didn't request this, please ignore this email.
+
+# Best regards,
+# LinkVault Team
+# '''
+#                 msg.html = f'''
+#                 <h2>Password Reset Request</h2>
+#                 <p>Hello {user.name},</p>
+#                 <p>You requested a password reset for your LinkVault account.</p>
+#                 <p><a href="{reset_url}" style="background: #c1e328; color: black; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a></p>
+#                 <p>Or copy this link: <br><code>{reset_url}</code></p>
+#                 <p>This link will expire in 1 hour.</p>
+#                 <p>If you didn't request this, please ignore this email.</p>
+#                 <hr>
+#                 <p>Best regards,<br>LinkVault Team</p>
+#                 '''
+                
+#                 mail.send(msg)
+#                 flash("Password reset link sent to your email", "success")
+#             except Exception as e:
+#                 flash("Error sending email. Please try again.", "error")
+#                 print(f"Email error: {e}")
+#         else:
+#             # Don't reveal if email exists (security)
+#             flash("If this email exists, a reset link has been sent.", "info")
+        
+#         return redirect(url_for("auth.login"))
+    
+#     return render_template("forgot_password.html")
+
+
+# @auth.route("/reset-password/<token>", methods=["GET", "POST"])
+# def reset_password(token):
+#     if current_user.is_authenticated:
+#         return redirect(url_for('bookmarks_api.dashboard'))
+    
+#     user = User.verify_reset_token(token)
+    
+#     if not user:
+#         flash("Invalid or expired reset link", "error")
+#         return redirect(url_for('auth.forgot_password'))
+    
+#     if request.method == "POST":
+#         password = request.form.get("password")
+#         confirm_password = request.form.get("confirm_password")
+        
+#         if not password or not confirm_password:
+#             flash("All fields are required", "error")
+#             return render_template("reset_password.html", token=token)
+        
+#         if password != confirm_password:
+#             flash("Passwords do not match", "error")
+#             return render_template("reset_password.html", token=token)
+        
+#         if len(password) < 6:
+#             flash("Password must be at least 6 characters", "error")
+#             return render_template("reset_password.html", token=token)
+        
+#         # Update password
+#         user.set_password(password)
+#         db.session.commit()
+        
+#         flash("Password reset successful! Please login.", "success")
+#         return redirect(url_for('auth.login'))
+    
+#     return render_template("reset_password.html", token=token)

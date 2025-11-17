@@ -1,0 +1,65 @@
+{% extends "welcome_base.html" %}
+{% block title %}Archived Bookmarks{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+<link rel="stylesheet" href="{{ url_for('static', filename='dist/output.css') }}" />
+<h1 class="text-3xl font-bold text-[#b4ff39] mb-8">Archived Bookmarks</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+ {% for b in bookmarks %}
+ <div class="bg-[#1a1a1a] p-6 rounded-xl shadow-lg border border-gray-800 flex flex-col justify-between">
+  <div class="mb-4 flex justify-between items-start">
+     <h2 class="text-xl font-semibold mb-2 text-white">{{ b.title }}</h2>
+     
+     <button title="Toggle Archive" class="hover:text-[#b4ff39] hover:cursor-pointer"
+      onclick="event.stopPropagation(); toggleArchive({{ b.id }}, {{ 'true' if b.archived else 'false' }})">
+     
+      {% if b.archived %}
+      <!-- Unarchive Icon -->
+      <i class="fa-solid fa-box-open text-yellow-400"></i>
+      {% else %}
+      <!-- Archive Icon -->
+      <i class="fa-solid fa-box-archive text-gray-400"></i>
+      {% endif %}
+     </button>
+  </div>
+  <p class="text-gray-400 mb-3">{{ b.url }}</p>
+
+  
+
+
+
+
+ </div>
+ {% else %}
+ <p class="text-gray-400">No archived bookmarks.</p>
+ {% endfor %}
+</div>
+
+<script>
+
+  const USER_ID = {{ user_id }};
+ async function toggleArchive(id, currentStatus) {
+   const newStatus = !currentStatus;
+
+   try {
+    const response = await fetch(`/api/bookmarks/${id}/archive?user_id=${USER_ID}`, {
+     method: "PATCH",
+     headers: { "Content-Type": "application/json" },
+     body: JSON.stringify({ archived: newStatus }),
+    });
+
+    if (response.ok) {
+     location.reload();
+    } else {
+     const error = await response.json();
+     alert(error.error || "Failed to toggle archive status.");
+    }
+   } catch (err) {
+    alert("Error toggling archive status: " + err.message);
+
+   }
+  }
+</script>
+{% endblock %}

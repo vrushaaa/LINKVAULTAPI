@@ -8,103 +8,98 @@
   All Bookmarks
 </h1>
 
-<section class="mt-12 w-full flex flex-col items-center ">
-
-<!-- HEADER ROW -->
-  <div class="w-full max-w-6xl flex items-center justify-between px-4 mb-8">
-
-    <!-- CENTER TITLE -->
-    <h2 class="text-3xl font-bold text-lime-400 flex-1">
-      Your Bookmarks
-    </h2>
-
-    <!-- RIGHT ADD BUTTON -->
-    <button onclick="openAddModal()"
-      class="px-4 py-2 border border-[#b4ff39] text-[#b4ff39] rounded-lg 
-             transition-all duration-200 hover:bg-[#b4ff39] hover:text-black 
-             neon-hover flex items-center gap-2">
-
-      <i data-feather="plus"></i>
-      Add Bookmark
-    </button>
-
-  </div>
+<section class="mt-12 w-full flex flex-col items-center "> <!-- HEADER ROW -->
+  <div class="w-full max-w-6xl flex items-center justify-between px-4 mb-8"> <!-- CENTER TITLE -->
+    
+    <h2 class="text-3xl font-bold text-lime-400 flex-1"> Your Bookmarks </h2> <!-- RIGHT ADD BUTTON --> <button
+      onclick="openAddModal()"
+      class="px-4 py-2 border border-[#b4ff39] text-[#b4ff39] rounded-lg transition-all duration-200 hover:bg-[#b4ff39] hover:text-black neon-hover flex items-center gap-2">
+      <i data-feather="plus"></i> Add Bookmark </button>
+      
+      <a href="{{ url_for('bookmarks_api.export_bookmarks') }}"
+             class="ml-2 px-4 py-2 border border-[#b4ff39] text-[#b4ff39] rounded-lg transition-all duration-200 hover:bg-[#b4ff39] hover:text-black neon-hover flex items-center gap-2">
+            Export
+      </a>
+  </div> {% if bookmarks %} <!-- FULL WIDTH BOOKMARK CARDS (STRETCHED) -->
 
 
-  {% if bookmarks %}
-
-  <!-- FULL WIDTH BOOKMARK CARDS (STRETCHED) -->
-  <div class="w-full max-w-6xl space-y-6 px-4">
-
-    {% for b in bookmarks %}
-    <div
-      class="w-full bg-[#111] border border-[#1f1f1f] 
-             hover:border-[#c1e328]/60 hover:shadow-[0_0_15px_rgba(193,227,40,0.15)]
-             transition-all duration-300 rounded-2xl p-6 cursor-pointer backdrop-blur-sm">
-
-      <div class="flex justify-between">
-        <div class="flex flex-col gap-1">
-          <div class="flex flex-row justify-between"></div>
-          <h2 class="text-xl font-semibold text-white">
-            {{ b.title or "Untitled" }}
-          </h2>
-
-          <a href="{{ http_url(b.url) }}" target="_blank"
-            class="text-gray-400 text-sm break-all hover:text-[#c1e328] transition"
-            onclick="event.stopPropagation()">
-            {{ b.url }}
-          </a>
-
-          <a href="{{ http_url(b.short_url) }}" target="_blank"
-            class="text-gray-500 text-xs hover:text-[#c1e328]"
-            onclick="event.stopPropagation()">
-            🔗 {{ b.short_url }}
-          </a>
-
-          <h2 class="text-xl font-semibold text-white">
-            {{ b.notes or "Untitled" }}
-          </h2>
-
-        </div>
-
-        <button class="hover:text-[#b4ff39] transition"
+  <div class="w-full max-w-6xl space-y-6 px-4"> {% for b in bookmarks %} <div
+      class="w-full bg-[#111] border border-[#1f1f1f] hover:border-[#c1e328]/60 hover:shadow-[0_0_15px_rgba(193,227,40,0.15)] transition-all duration-300 rounded-2xl p-6 cursor-pointer  backdrop-blur-sm">
+      
+    <div class="flex items-center justify-between">
+      <!-- Title -->
+      <h2 class="text-3xl font-semibold text-white flex-1">
+        {{ b.title or "Untitled" }}
+      </h2>
+    
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-4 ml-4">
+        <!-- QR Code Button -->
+        <button class="hover:text-[#b4ff39] transition" title="Show QR Code"
           onclick="event.stopPropagation(); showQR({{ b.id }})">
-          <i class="fa-solid fa-qrcode text-[#b4ff39] text-3xl"></i>
+          <i class="fa-solid fa-qrcode text-[#b4ff39] text-2xl"></i>
+        </button>
+    
+        <!-- Archive Toggle Button -->
+        <button title="Toggle Archive" class="hover:text-[#b4ff39] transition hover:cursor-pointer"
+          onclick="event.stopPropagation(); toggleArchive({{ b.id }}, {{ 'true' if b.archived else 'false' }})">
+          {% if b.archived %}
+          <i class="fa-solid fa-box-open text-yellow-400 text-2xl"></i> <!-- unarchive icon -->
+          {% else %}
+          <i class="fa-solid fa-archive text-gray-400 text-2xl"></i> <!-- archive icon -->
+          {% endif %}
         </button>
       </div>
-
-      <div class="flex justify-between items-center mt-4">
-        <div class="flex flex-wrap gap-2">
-          {% for tag in b.tags %}
-          <span class="bg-[#263a19] text-[#b4ff39] px-3 py-1 text-xs rounded-full">
-            {{ tag }}
-          </span>
-          {% endfor %}
-        </div>
-
-        <div class="flex gap-4 text-gray-400">
-          <button title="Edit" class="hover:text-[#b4ff39]"
-            onclick="event.stopPropagation(); openEditModal({{ b.id }})">
-            <i data-feather="edit-2"></i>
-          </button>
-
-          <button title="Delete" class="hover:text-red-500"
-            onclick="event.stopPropagation(); openDeleteModal({{ b.id }})">
-            <i data-feather="trash-2"></i>
-          </button>
-        </div>
-      </div>
-
     </div>
-    {% endfor %}
 
-  </div>
+      <div class="flex flex-row justify-between items-start">
+        <div>
+          <div class="flex flex-col"> <a href="{{ http_url(b.url) }}" target="_blank"
+              class="text-gray-400 text-xl break-all hover:text-[#c1e328] transition mt-3"
+              onclick="event.stopPropagation()"> 🔗{{ b.url }} </a> <a href="{{ short_http_url(b.short_url) }}"
+              target="_blank" class="text-gray-500 text-xl hover:text-[#c1e328] mt-3" onclick="event.stopPropagation()">
+              🔗 {{ b.short_url }} </a> </div>
+          <div>
+            <p class="text-gray-300 text-base mt-2"> Notes: {{ b.notes or "No notes added." }} </p>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-3"> {% for tag in b.tags %} <span
+              class="bg-[#263a19] text-[#b4ff39] px-3 py-1 text-sm rounded-full"> {{ tag }} </span> {% endfor %} </div>
+        </div>
+        <div class="flex gap-4 text-gray-400 align-bottom ml-auto mt-3"> <button title="Edit"
+            class="hover:text-[#b4ff39]" onclick="event.stopPropagation(); openEditModal({{ b.id }})"> <i
+              data-feather="edit-2"></i> </button> <button title="Delete" class="hover:text-red-500"
+            onclick="event.stopPropagation(); openDeleteModal({{ b.id }})"> <i data-feather="trash-2"></i> </button>
+        </div>
+      </div> 
+    </div> {% endfor %} </div> {% else %} <p class="text-gray-400 text-center mt-6">No bookmarks found.</p> {% endif %}
+</section>
 
-  {% else %}
-  <p class="text-gray-400 text-center mt-6">No bookmarks found.</p>
+{% if total_pages > 1 %}
+<div class="flex justify-center items-center gap-3 mt-8">
+  {% if page > 1 %}
+  <a href="{{ url_for('bookmarks_api.dashboard2', page=page-1) }}" class="text-[#c1e328]">
+    <i data-feather="chevron-left"></i>
+  </a>
   {% endif %}
 
-</section>
+  {% for p in range(1, total_pages + 1) %}
+  {% if p == page %}
+  <span class="px-3 py-1 bg-[#c1e328] text-black font-semibold rounded-lg">{{ p }}</span>
+  {% else %}
+  <a href="{{ url_for('bookmarks_api.dashboard2', page=p) }}"
+    class="px-3 py-1 bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg hover:border-[#c1e328] text-[#c1e328]">
+    {{ p }}
+  </a>
+  {% endif %}
+  {% endfor %}
+
+  {% if page < total_pages %} <a href="{{ url_for('bookmarks_api.dashboard2', page=page+1) }}" class="text-[#c1e328]">
+    <i data-feather="chevron-right"></i>
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
 
 
 <!-- BOOKMARK DETAILS MODAL -->
@@ -484,7 +479,6 @@
       console.log("Bookmark fetched:", bookmark);
 
       document.getElementById("editTitle").value = bookmark.title;
-      document.getElementById("editUrl").value = bookmark.url;
       document.getElementById("editNotes").value = bookmark.notes;
       document.getElementById("editTags").value = bookmark.tags.join(", ");
       document.getElementById("editArchive").value = bookmark.archived.toString();
@@ -537,6 +531,28 @@
         }
       } catch (err) {
         alert("Error updating bookmark: " + err.message);
+      }
+    }
+ 
+    async function toggleArchive(id, currentStatus){
+      const newStatus = !currentStatus;
+
+      try{
+        const response = await fetch(`/api/bookmarks/${id}/archive?user_id=${USER_ID}`,{
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ archived: newStatus }),
+        });
+
+        if (response.ok){
+          location.reload();
+        } else {
+          const error = await response.json();
+          alert(error.error || "Failed to toggle archive status.");
+        }
+      } catch (err){
+        alert("Error toggling archive status: " + err.message);
+
       }
     }
 

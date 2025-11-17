@@ -5,22 +5,37 @@ from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from config import Config
 import os
+from flask_mail import Mail
+
 
 # === DECLARE db & migrate FIRST ===
 db = SQLAlchemy()
 migrate = Migrate()
 bcrypt = Bcrypt()
 login_manager = LoginManager()
+mail = Mail()
 
 def create_app():
     app = Flask(__name__)
     
     app.config.from_object(Config)
 
+    app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+    app.config['MAIL_PORT'] = 587
+    app.config['MAIL_USE_TLS'] = True
+    app.config['MAIL_USERNAME'] = 'linkvault6@gmail.com'
+    app.config['MAIL_PASSWORD'] = 'linkvault@123'
+
+    app.config['SECRET_KEY'] = 'your-secret-key'
+
+
+
     db.init_app(app)
     migrate.init_app(app, db)
     bcrypt.init_app(app)
     login_manager.init_app(app)
+
+    mail.init_app(app)
     
     @login_manager.user_loader
     def load_user(user_id):
@@ -100,6 +115,12 @@ def create_app():
             return url
         return 'https://' + url
     app.jinja_env.globals.update(http_url=http_url)
+
+    def short_http_url(url):
+        if url.startswith('http://') or url.startswith('https://'):
+            return url
+        return 'http://127.0.0.1:5000/' + url
+    app.jinja_env.globals.update(short_http_url=short_http_url)
 
     
 
