@@ -47,6 +47,32 @@ def extract_title(url):
         return title_tag.get_text(strip=True) if title_tag else None
     except Exception:
         return None
+    
+def extract_meta_keywords(url):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(url, headers=headers, timeout=6)
+        resp.raise_for_status()
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Find meta keywords tag
+        meta_tag = soup.find("meta", attrs={"name": "keywords"})
+        if not meta_tag:
+            return []
+
+        content = meta_tag.get("content")
+        if not content:
+            return []
+
+        # Convert comma-separated string → list of tags
+        tags = [kw.strip().lower() for kw in content.split(",") if kw.strip()]
+
+        return tags
+
+    except Exception:
+        return []
+    
 
 @bp.route('/', methods=['GET'])
 @login_required
@@ -94,7 +120,7 @@ def extract_title(url):
         return None
 
 
-
+# bookmark creation route
 @bp.route('/bookmarks', methods=['POST'])
 @login_required
 def create_bookmark():
@@ -112,6 +138,11 @@ def create_bookmark():
     norm_url = normalize_url(url)
     url_hash = generate_url_hash(norm_url)
     existing = Bookmark.query.filter_by(hash_url=url_hash).first()
+
+    if not tags:  
+        auto_tags = extract_meta_keywords(norm_url)
+        if auto_tags:
+            tags = auto_tags
 
     if existing:
         # Check if user already has this bookmark
@@ -473,6 +504,30 @@ def list_bookmarks():
         UserBookmark.user_id == user_id
     )
 
+    # validate allowed query parameters
+    allowed_params = {'page', 'per_page', 'tag', 'q', 'archived', 'id'}
+    invalid_params = set(request.args.keys()) - allowed_params
+    if invalid_params:
+        mainMessage = "Invalid query parameter(s) provided."
+        subMessage = f"Invalid: {', '.join(invalid_params)}. Allowed: {', '.join(allowed_params)}"
+
+        if request.accept_mimetypes.accept_html:
+        # Render custom error page
+            return render_template(
+            'noBookmark.html',
+            SCode=400,
+            message=mainMessage,
+            subMessage=subMessage
+        ), 400
+
+    # Default JSON response
+        return jsonify({
+        'error': mainMessage,
+        'details': subMessage,
+        'correct_url_example': url_for('bookmarks_api.list_bookmarks', _external=True)
+    }), 400
+
+
     # Apply tag filter
     if tag_filter:
         query = query.join(
@@ -634,15 +689,24 @@ def archived_page():
     )
 
 # error handling
+# error handling with template rendering
+from flask import request
+
 @bp.errorhandler(400)
 def bad_request(e):
+    if request.accept_mimetypes.accept_html:
+        return render_template('noBookmark.html', SCode=400, message=str(e)), 400
     return jsonify({'error': 'Bad Request', 'message': str(e)}), 400
 
 @bp.errorhandler(404)
 def not_found(e):
-    return jsonify({'error': 'Not Found'}), 404
+    if request.accept_mimetypes.accept_html:
+        return render_template('noBookmark.html', SCode=404, message='Page not found'), 404
+    return jsonify({'error': 'Not Found', 'message': str(e)}), 404
 
 @bp.errorhandler(500)
 def internal_error(e):
     db.session.rollback()
-    return jsonify({'error': 'Server Error'}), 500
+    if request.accept_mimetypes.accept_html:
+        return render_template('noBookmark.html', SCode=500, message='Internal server error'), 500
+    return jsonify({'error': 'Server Error', 'message': str(e)}), 500
