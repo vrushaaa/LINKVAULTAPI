@@ -10,7 +10,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LinkVault | Create Account</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- <script src="https://cdn.tailwindcss.com"></script> -->
+   <link rel="stylesheet" href="{{ url_for('static', filename='dist/output.css') }}" />
   <style>
     body {
       background-color: #111; /* Dark background */
@@ -46,6 +47,9 @@
         <input type="text" name="name" placeholder="Full Name" required
                class="w-full bg-transparent border border-gray-700 rounded-md px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-lime-400" />
 
+        <input type="text" name="username" placeholder="Username" required
+               class="w-full bg-transparent border border-gray-700 rounded-md px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-lime-400" />
+
         <input type="email" name="email" placeholder="Email" required
                class="w-full bg-transparent border border-gray-700 rounded-md px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-lime-400" />
 
@@ -63,25 +67,26 @@
         <a href="{{ url_for('auth.login') }}" class="text-lime-400 hover:underline">Login</a>
       </p>
 
-      <div class="flex items-center justify-center my-4">
+      <!-- <div class="flex items-center justify-center my-4">
         <hr class="w-20 border-gray-600" />
         <span class="mx-3 text-gray-400 text-sm">or</span>
         <hr class="w-20 border-gray-600" />
-      </div>
+      </div> -->
 
-      <div class="flex justify-center space-x-4">
-        <a href="{{ url_for('auth.google_login') }}"
+      <!-- <div class="flex justify-center space-x-4">
+        <a href="{{ url_for('auth.login_google') }}"
            class="flex items-center space-x-2 border border-gray-600 px-4 py-2 rounded-md hover:bg-gray-800 transition">
           <img src="{{ url_for('static', filename='google_icon.png') }}" alt="Google" class="w-5 h-5" />
           <span class="text-sm">Sign up using Google</span>
         </a>
 
-        <a href="{{ url_for('auth.github_login') }}"
+        <a href="{{ url_for('auth.login_github') }}"
            class="flex items-center space-x-2 border border-gray-600 px-4 py-2 rounded-md hover:bg-gray-800 transition">
           <img src="{{ url_for('static', filename='github_icon.png') }}" alt="GitHub" class="w-5 h-5" />
           <span class="text-sm">Sign up using GitHub</span>
         </a>
-      </div>
+      </div> -->
+      
     </div>
   </div>
 </body>

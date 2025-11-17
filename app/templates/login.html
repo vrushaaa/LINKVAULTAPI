@@ -3,8 +3,8 @@
 {% block title %}LinkVault | Login{% endblock %}
 
 {% block content %}
-  <title>LinkVault | Login</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- <script src="https://cdn.tailwindcss.com"></script> -->
+   <link rel="stylesheet" href="{{ url_for('static', filename='dist/output.css') }}" />
   <style>
     body {
       background-color: #111;
@@ -22,7 +22,7 @@
       <h1 class="text-2xl font-bold mb-6 text-center">Welcome Back</h1>
 
       <form action="{{ url_for('auth.login') }}" method="POST" class="space-y-4">
-        <input type="email" name="email" placeholder="Email" required
+        <input type="text" name="username" placeholder="username / email" required
                class="w-full bg-transparent border border-gray-700 rounded-md px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-lime-400" />
 
         <input type="password" name="password" placeholder="Password" required
@@ -35,32 +35,34 @@
       </form>
 
       <div class="flex justify-between text-sm text-gray-400 mt-3">
-        <a href="{{ url_for('bookmarks_api.get_bookmark',bookmark_id=1) }}" class="hover:underline text-lime-400">Forgot Password?</a>
+        <a href="{{ url_for('auth.forgot_password') }}" class="hover:underline text-lime-400">Forgot Password?</a>
         <span>
           Don't have an Account?
           <a href="{{ url_for('auth.signup') }}" class="text-lime-400 hover:underline">Sign Up</a>
         </span>
       </div>
 
-      <div class="flex items-center justify-center my-4">
+
+      <!-- <div class="flex items-center justify-center my-4">
         <hr class="w-20 border-gray-600" />
         <span class="mx-3 text-gray-400 text-sm">or</span>
         <hr class="w-20 border-gray-600" />
       </div>
 
       <div class="flex justify-center space-x-4">
-        <a href="{{ url_for('auth.google_login') }}"
+        <a href="{{ url_for('auth.login_google') }}"
            class="flex items-center space-x-2 border border-gray-600 px-4 py-2 rounded-md hover:bg-gray-800 transition">
           <img src="{{ url_for('static', filename='google_icon.png') }}" alt="Google" class="w-5 h-5" />
-          <span class="text-sm">Sign in using Google</span>
+          <span class="text-sm">Sign up using Google</span>
         </a>
 
-        <a href="{{ url_for('auth.github_login') }}"
+        <a href="{{ url_for('auth.login_github') }}"
            class="flex items-center space-x-2 border border-gray-600 px-4 py-2 rounded-md hover:bg-gray-800 transition">
           <img src="{{ url_for('static', filename='github_icon.png') }}" alt="GitHub" class="w-5 h-5" />
-          <span class="text-sm">Sign in using GitHub</span>
+          <span class="text-sm">Sign up using GitHub</span>
         </a>
-      </div>
+      </div> -->
+      
     </div>
 
     <!-- Right Panel (Green Info) -->

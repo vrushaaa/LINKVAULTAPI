@@ -4,9 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}LinkVault{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='dist/output.css') }}" />
 
-  <!-- <script src="https://cdn.tailwindcss.com"></script> -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
   <style>
     body {
@@ -57,28 +56,20 @@
         <!-- Center Navigation -->
         <div class="hidden md:flex items-center space-x-10 text-gray-300 font-medium">
           <a href="{{ url_for('short.home') }}" class="nav-link hover:text-white">Home</a>
-          <!-- <a href="{{ url_for('bookmarks_api.list_bookmarks') }}" class="nav-link hover:text-white">Bookmarks</a>
-          <a href="{{ url_for('bookmarks_api.list_bookmarks') }}" class="nav-link hover:text-white">Tags</a> -->
+          <a href="{{ url_for('bookmarks_api.dashboard2') }}" class="nav-link hover:text-white">Bookmarks</a>
+          <a href="{{ url_for('bookmarks_api.list_tags') }}" class="nav-link hover:text-white">Tags</a>
           <a href="#" class="nav-link hover:text-white">About</a>
         </div>
 
-        <!-- Auth Buttons -->
         <div class="flex items-center space-x-4">
 
-          <a href="{{ url_for('auth.login') }}"
+          <a href="{{ url_for('auth.logout') }}"
              class="px-4 py-1.5 border border-[#b4ff39] text-[#b4ff39] rounded-lg 
                     transition-all duration-200 hover:bg-[#b4ff39] hover:text-black neon-hover">
-            Login
-          </a>
-
-          <a href="{{ url_for('auth.signup') }}"
-             class="px-4 py-1.5 border border-[#b4ff39] text-[#b4ff39] rounded-lg 
-                    transition-all duration-200 hover:bg-[#b4ff39] hover:text-black neon-hover">
-            Sign Up
+            Logout
           </a>
 
         </div>
-
       </div>
     </div>
   </nav>
