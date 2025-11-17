@@ -1,5 +1,5 @@
 """
-LinkVault Dummy Data Initializer (Auth‑Ready)
+LinkVault Dummy Data Initializer (Auth-Ready)
 Run:  python init_db.py
 """
 
@@ -139,7 +139,7 @@ def init_db_with_data():
         print("Sample curl commands:")
         for u in users:
             print(f'curl "http://127.0.0.1:5000/api/bookmarks?user_id={u.id}"')
-        print("\nLogin (Flask‑Login ready):")
+        print("\nLogin (Flask-Login ready):")
         for u in users:
             print(f'curl -X POST http://127.0.0.1:5000/auth/login '
                   f'-H "Content-Type: application/json" '

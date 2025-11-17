@@ -76,3 +76,17 @@ migrations/
 
 # CLI script (optional — keep if team uses it)
 # linkvault
+
+
+# Tailwind output files (generated automatically)
+app/static/dist/
+
+# --- Node / Tailwind ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+pnpm-lock.yaml
+dist/

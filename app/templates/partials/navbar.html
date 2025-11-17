@@ -1,14 +1,19 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{% block title %}LinkVault{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='dist/output.css') }}" />
+<!-- <nav
+  class="flex items-center justify-between bg-[#121212] px-6 py-3 border-b border-[#2A2A2A]"
+>
+  <div class="flex items-center space-x-3">
+    <button id="menu-btn" class="focus:outline-none" title="menu-btn">
+      <i data-feather="menu" class="text-[#c1e328]"></i>
+    </button>
+    <h1 class="text-xl font-bold text-[#c1e328]">LinkVault</h1>
+  </div>
 
-  <!-- <script src="https://cdn.tailwindcss.com"></script> -->
+  <div>
+    <i data-feather="user" class="text-[#c1e328] cursor-pointer"></i>
+  </div>
+</nav> -->
 
-  <style>
+<style>
     body {
       background-color: #111;
       color: #e5e5e5;
@@ -40,11 +45,9 @@
       width: 100%;
     }
   </style>
-</head>
 
-<body class="min-h-screen flex flex-col">
 
-  <!-- 🌐 NAVIGATION BAR -->
+<!-- 🌐 NAVIGATION BAR -->
   <nav class="fixed top-0 w-full z-50 border-b border-gray-800 bg-[#0b0b0b]/90 backdrop-blur-lg shadow-lg">
     <div class="max-w-7xl mx-auto px-6">
       <div class="flex justify-between items-center h-16">
@@ -57,42 +60,20 @@
         <!-- Center Navigation -->
         <div class="hidden md:flex items-center space-x-10 text-gray-300 font-medium">
           <a href="{{ url_for('short.home') }}" class="nav-link hover:text-white">Home</a>
-          <!-- <a href="{{ url_for('bookmarks_api.list_bookmarks') }}" class="nav-link hover:text-white">Bookmarks</a>
-          <a href="{{ url_for('bookmarks_api.list_bookmarks') }}" class="nav-link hover:text-white">Tags</a> -->
+          <a href="{{ url_for('bookmarks_api.dashboard2') }}" class="nav-link hover:text-white">Bookmarks</a>
+          <a href="{{ url_for('bookmarks_api.list_tags') }}" class="nav-link hover:text-white">Tags</a>
           <a href="#" class="nav-link hover:text-white">About</a>
         </div>
 
-        <!-- Auth Buttons -->
         <div class="flex items-center space-x-4">
 
-          <a href="{{ url_for('auth.login') }}"
+          <a href="{{ url_for('auth.logout') }}"
              class="px-4 py-1.5 border border-[#b4ff39] text-[#b4ff39] rounded-lg 
                     transition-all duration-200 hover:bg-[#b4ff39] hover:text-black neon-hover">
-            Login
-          </a>
-
-          <a href="{{ url_for('auth.signup') }}"
-             class="px-4 py-1.5 border border-[#b4ff39] text-[#b4ff39] rounded-lg 
-                    transition-all duration-200 hover:bg-[#b4ff39] hover:text-black neon-hover">
-            Sign Up
+            Logout
           </a>
 
         </div>
-
       </div>
     </div>
   </nav>
-
-  <!-- 🔹 MAIN PAGE CONTENT -->
-  <main class="flex-1 px-6 py-10 mt-20">
-    {% block content %}
-    {% endblock %}
-  </main>
-
-  <!-- ⚙️ FOOTER -->
-  <footer class="bg-[#0c0c0c] border-t border-gray-800 text-gray-500 py-4 text-center text-sm">
-    © {{ current_year }} <span class="text-[#b4ff39] font-semibold">LinkVault</span> — Built with Flask & Tailwind CSS
-  </footer>
-
-</body>
-</html>
