@@ -66,14 +66,40 @@ start my_bookmarks.html
 <!-- Document which states functionalities of project -->
 
 
-python linkvault_client.py signup --name "Test User" --email "test@gmail.com" --username testcli --password test123
-python linkvault_client.py login --username testcli --password test123
-python linkvault_client.py create "https://example.com" --title "Example"
-python linkvault_client.py create "https://google.com" --tags search,tech
-python linkvault_client.py list --format-json
-python linkvault_client.py update 1 --notes "Updated note"
-python linkvault_client.py get 1 --format-json
-python linkvault_client.py qr 1
-python linkvault_client.py export bookmarks.html
-python linkvault_client.py delete 1
+python linkvault_client.py signup --name "dhruv naik" --email "dhruv@gmail.com" --username dhruv --password dhruv
+python linkvault_client.py login --username dhruv --password dhruv
+
+python linkvault_client.py create "https://example.com"
+python linkvault_client.py create "https://google.com" --title "Google" --notes "Search engine" --tags search,tech
+python linkvault_client.py create "https://github.com" --tags code --tags dev --tags tools
+
+python linkvault_client.py list 
+
+python linkvault_client.py list --tag tech 
+python linkvault_client.py list --q google
+
+python linkvault_client.py update 2 --title "Updated Google Title" #error
+python linkvault_client.py update 2 --notes "Updated Google Notes"
+python linkvault_client.py update 2 --tags search,reference
+python linkvault_client.py update 2 --archived
+python linkvault_client.py update 2 --unarchive
+
+python linkvault_client.py toggle_archive 2 #error
+
+python linkvault_client.py export exported_bookmarks.html
+
+python linkvault_client.py qr 2
+
+python linkvault_client.py delete 3  #error
 python linkvault_client.py logout
+
+
+
+# error
+python linkvault_client.py update 2 --title "Updated Google Title" #error
+python linkvault_client.py update 2 --notes "Updated Google Notes"
+python linkvault_client.py update 2 --tags search,reference
+python linkvault_client.py update 2 --archived
+python linkvault_client.py update 2 --unarchive
+python linkvault_client.py toggle_archive 2 #error
+python linkvault_client.py delete 3  #error

@@ -1,17 +1,41 @@
-"""
-linkvault_client - command-line client for LinkVault API
-Usage:
-    python linkvault_client.py <command> [options]
-"""
-
 import click
 import requests
 import json
-from urllib.parse import urlencode
 import os
+from urllib.parse import urlencode
 
-BASE_URL = "http://127.0.0.1:5000"   # change if you run on another host/port
+BASE_URL = "http://127.0.0.1:5000"
+SESSION_FILE = ".linkvault_session"
 
+
+# ---------------------------------------------------------
+# LOAD + SAVE SESSION (Persistent Login)
+# ---------------------------------------------------------
+def load_session():
+    """Load stored cookies from file (simulate browser session)."""
+    session = requests.Session()
+    if os.path.exists(SESSION_FILE):
+        try:
+            with open(SESSION_FILE, "r") as f:
+                cookies = requests.utils.cookiejar_from_dict(json.load(f))
+                session.cookies = cookies
+        except Exception:
+            pass
+    return session
+
+
+def save_session(session):
+    """Save cookies to a local file after login."""
+    with open(SESSION_FILE, "w") as f:
+        json.dump(requests.utils.dict_from_cookiejar(session.cookies), f)
+
+
+session = load_session()
+
+
+# ---------------------------------------------------------
+# PRETTY PRINT JSON OR FALLBACK HTML
+# ---------------------------------------------------------
 def _print(resp: requests.Response):
     click.echo(f"Status: {resp.status_code}")
     try:
@@ -19,150 +43,216 @@ def _print(resp: requests.Response):
     except Exception:
         click.echo(resp.text)
 
-@click.group(help="LinkVault API client - CRUD + export")
+
+@click.group(help="LinkVault API Client (with authentication)")
 def cli():
     pass
 
 
 def _split_tags(tags):
+    """Split '--tags a,b --tags c' into list ['a','b','c']"""
     result = []
     for t in tags:
         result.extend([x.strip() for x in t.split(",") if x.strip()])
     return result
 
-#create bookmark
+
+# ---------------------------------------------------------
+# AUTH: SIGNUP
+# ---------------------------------------------------------
+@cli.command()
+@click.option("--name", required=True)
+@click.option("--email", required=True)
+@click.option("--username", required=True)
+@click.option("--password", required=True)
+def signup(name, email, username, password):
+    """POST /auth/signup"""
+    payload = {
+        "name": name,
+        "email": email,
+        "username": username,
+        "password": password,
+    }
+
+    r = session.post(f"{BASE_URL}/auth/signup", json=payload)
+    _print(r)
+
+
+# ---------------------------------------------------------
+# AUTH: LOGIN
+# ---------------------------------------------------------
+@cli.command()
+@click.option("--username", required=True)
+@click.option("--password", required=True)
+def login(username, password):
+    """POST /auth/login — saves session cookie"""
+    payload = {"username": username, "password": password}
+
+    r = session.post(f"{BASE_URL}/auth/login", json=payload)
+
+    if r.status_code == 200:
+        save_session(session)
+        click.echo("Logged in successfully. Session saved.")
+
+    _print(r)
+
+
+# ---------------------------------------------------------
+# AUTH: LOGOUT
+# ---------------------------------------------------------
+@cli.command()
+def logout():
+    """GET /auth/logout — clears session"""
+    r = session.get(f"{BASE_URL}/auth/logout")
+
+    if os.path.exists(SESSION_FILE):
+        os.remove(SESSION_FILE)
+        click.echo("Logout successful. Session cleared.")
+
+    # _print(r)
+
+
+# ---------------------------------------------------------
+# CREATE BOOKMARK
+# ---------------------------------------------------------
 @cli.command()
 @click.argument("url")
-@click.option("--title", help="Bookmark title")
-@click.option("--notes", help="Notes")
-@click.option(
-    "--tags",
-    multiple=True,
-    help="Tags - repeat the flag OR give a comma-separated list",
-)
-@click.option("--archived", is_flag=True, help="Mark as archived")
+@click.option("--title")
+@click.option("--notes")
+@click.option("--tags", multiple=True)
+@click.option("--archived", is_flag=True)
 def create(url, title, notes, tags, archived):
-    """POST /api/bookmarks - add a new bookmark."""
-    tags = _split_tags(tags)               
+    """POST /api/bookmarks — create new bookmark"""
     payload = {
         "url": url,
-        "title": title or None,
-        "notes": notes or None,
-        "tags": tags or None,   
+        "title": title,
+        "notes": notes,
+        "tags": _split_tags(tags),
         "archived": archived,
     }
-    r = requests.post(f"{BASE_URL}/api/bookmarks", json=payload)
+
+    r = session.post(f"{BASE_URL}/api/bookmarks", json=payload)
     _print(r)
 
-#pagination and filtering
-@cli.command()
-@click.option("--page", default=1, type=int, help="Page number")
-@click.option("--per-page", default=5, type=int, help="Items per page")
-@click.option("--tag", help="Filter by tag")
-@click.option("--q", help="Search keyword")
-@click.option("--archived", is_flag=True, help="Show only archived")
-def list(page, per_page, tag, q, archived):
-    """GET /api/bookmarks - list bookmarks."""
-    params = {
-        "page": page,
-        "per_page": per_page,
-        "tag": tag,
-        "q": q,
-        "archived": "true" if archived else None,
-    }
-    
-    params = {k: v for k, v in params.items() if v is not None}
-    r = requests.get(f"{BASE_URL}/api/bookmarks?{urlencode(params)}")
+
+# ---------------------------------------------------------
+# LIST BOOKMARKS
+# ---------------------------------------------------------
+@cli.command(name="list")
+@click.option("--tag")
+@click.option("--q")
+@click.option("--archived", is_flag=True)
+@click.option("--format-json", is_flag=True)
+def list(tag, q, archived, format_json):
+    """GET /api/bookmarks — list all bookmarks"""
+    params = {}
+
+    if tag:
+        params["tag"] = tag
+    if q:
+        params["q"] = q
+    if archived:
+        params["archived"] = "true"
+    if format_json:
+        params["format"] = "json"
+
+    url = f"{BASE_URL}/api/bookmarks"
+    if params:
+        url += "?" + urlencode(params)
+
+    headers = {"Accept": "application/json"}
+
+    r = session.get(url, headers=headers)
     _print(r)
 
-#update bookmark
+
+
+# ---------------------------------------------------------
+# UPDATE BOOKMARK
+# ---------------------------------------------------------
 @cli.command()
 @click.argument("bookmark_id", type=int)
-@click.option("--title", help="New title")
-@click.option("--notes", help="New notes")
-@click.option("--tags", multiple=True, help="New tags - repeat OR use comma list")
-@click.option("--archived", is_flag=True, help="Set archived")
-@click.option("--unarchive", is_flag=True, help="Unset archived")
+@click.option("--title")
+@click.option("--notes")
+@click.option("--tags", multiple=True)
+@click.option("--archived", is_flag=True)
+@click.option("--unarchive", is_flag=True)
 def update(bookmark_id, title, notes, tags, archived, unarchive):
-    """PUT /api/bookmarks/<id> - partial update."""
-    
-    final_tags = []
-    for t in tags:
-        final_tags.extend([x.strip() for x in t.split(",") if x.strip()])
-
+    """PUT /api/bookmarks/<id>"""
     payload = {}
+
     if title is not None:
         payload["title"] = title
     if notes is not None:
         payload["notes"] = notes
+
+    final_tags = _split_tags(tags)
     if final_tags:
         payload["tags"] = final_tags
+
     if archived:
         payload["archived"] = True
     if unarchive:
         payload["archived"] = False
 
-    r = requests.put(f"{BASE_URL}/api/bookmarks/{bookmark_id}", json=payload)
-    _print(r)
 
-#delete bookmark
+    r = session.put(f"{BASE_URL}/api/bookmarks/{bookmark_id}", json=payload)
+    # _print(r)
+
+
+# ---------------------------------------------------------
+# DELETE BOOKMARK
+# ---------------------------------------------------------
 @cli.command()
 @click.argument("bookmark_id", type=int)
 def delete(bookmark_id):
-    """DELETE /api/bookmarks/<id>."""
-    r = requests.delete(f"{BASE_URL}/api/bookmarks/{bookmark_id}")
+    """DELETE /api/bookmarks/<id>"""
+    r = session.delete(f"{BASE_URL}/api/bookmarks/{bookmark_id}")
     _print(r)
 
-#toggle archive
+
+# ---------------------------------------------------------
+# TOGGLE ARCHIVE
+# ---------------------------------------------------------
 @cli.command()
 @click.argument("bookmark_id", type=int)
 def toggle_archive(bookmark_id):
-    """PATCH /api/bookmarks/<id>/archive."""
-    r = requests.patch(f"{BASE_URL}/api/bookmarks/{bookmark_id}/archive")
+    """PATCH /api/bookmarks/<id>/archive"""
+    # Server still expects user_id in query param
+    url = f"{BASE_URL}/api/bookmarks/{bookmark_id}/archive"
+    r = session.patch(url)
     _print(r)
 
-#export bookmarks
+
+# ---------------------------------------------------------
+# EXPORT BOOKMARKS (HTML)
+# ---------------------------------------------------------
 @cli.command()
 @click.argument("output_file", type=click.Path())
 def export(output_file):
-    """GET /api/export - download Netscape HTML."""
-    r = requests.get(f"{BASE_URL}/api/export", stream=True)
+    """GET /api/export — downloads an HTML file"""
+    r = session.get(f"{BASE_URL}/api/export", stream=True)
+
     if r.status_code != 200:
         _print(r)
         return
 
     with open(output_file, "wb") as f:
-        for chunk in r.iter_content(chunk_size=8192):
+        for chunk in r.iter_content(8192):
             f.write(chunk)
-    click.echo(f"Exported to {output_file}")
 
-#filter by multiple tags
+    click.echo(f"Exported → {output_file}")
+
+
+# ---------------------------------------------------------
+# GENERATE QR CODE
+# ---------------------------------------------------------
 @cli.command()
-@click.option("--page", default=1, type=int, help="Page number")
-@click.option("--per-page", default=5, type=int, help="Items per page")
-@click.option("--tag", multiple=True, help="Filter by tags (repeat --tag)")
-@click.option("--q", help="Search keyword")
-@click.option("--archived", is_flag=True, help="Show only archived")
-@click.option("--id", type=int, help="Filter by bookmark ID")
-def list(page, per_page, tag, q, archived, id):
-    """GET /api/bookmarks - list bookmarks."""
-    params = {
-        "page": page,
-        "per_page": per_page,
-        "q": q,
-        "archived": "true" if archived else None,
-        "id": id,
-    }
-    if tag:
-        params["tag"] = ",".join(tag)
-
-    params = {k: v for k, v in params.items() if v is not None}
-    
-    url = f"{BASE_URL}/api/bookmarks/{id}"
-    if params:
-        url += "?" + urlencode(params)
-    
-    r = requests.get(url)
+@click.argument("bookmark_id", type=int)
+def qr(bookmark_id):
+    """GET /api/bookmarks/<id>/qr — return QR data URI"""
+    headers = {"Accept": "application/json"}
+    r = session.get(f"{BASE_URL}/api/bookmarks/{bookmark_id}/qr", headers=headers)
     _print(r)
 
 

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}LinkVault{% endblock %}</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='logo.ico') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='dist/output.css') }}" />
 
   <!-- <script src="https://cdn.tailwindcss.com"></script> -->
@@ -54,13 +55,7 @@
           <span class="text-[#b4ff39]">Link</span>Vault
         </a>
 
-        <!-- Center Navigation -->
-        <div class="hidden md:flex items-center space-x-10 text-gray-300 font-medium">
-          <a href="{{ url_for('short.home') }}" class="nav-link hover:text-white">Home</a>
-          
-          
-          <!-- <a href="#" class="nav-link hover:text-white">About</a> -->
-        </div>
+  
 
         <!-- Auth Buttons -->
         <div class="flex items-center space-x-4">

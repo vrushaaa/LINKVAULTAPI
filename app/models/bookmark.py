@@ -21,7 +21,7 @@ class Bookmark(db.Model):
     __tablename__ = 'bookmark'
 
     id = db.Column(db.Integer, primary_key=True)
-    url = db.Column(db.String(2048), nullable=False, unique=True)
+    url = db.Column(db.String(255), nullable=False, unique=True)
     hash_url = db.Column(db.String(32), nullable=False, unique=True)
     short_url = db.Column(db.String(20), nullable=False, unique=True)
 

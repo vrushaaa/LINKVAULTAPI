@@ -185,8 +185,8 @@ def update_bookmark(bookmark_id):
     if not data:
         return jsonify({'error': 'Invalid or missing JSON'}), 400
 
-    user_id = data.get('user_id')
-    # user_id = current_user.id
+    # user_id = data.get('user_id')
+    user_id = current_user.id
     if not user_id:
         return render_template('noBookmark.html', message='user_id required'), 400
 
@@ -247,7 +247,8 @@ def update_bookmark(bookmark_id):
 @bp.route('/bookmarks/<int:bookmark_id>/archive', methods=['PATCH'])
 @login_required
 def toggle_archive(bookmark_id):
-    user_id = request.args.get('user_id', type=int)
+    # user_id = request.args.get('user_id', type=int)
+    user_id = current_user.id
     if not user_id:
         return jsonify({'error': 'user_id required'}), 400
 
@@ -268,7 +269,9 @@ def toggle_archive(bookmark_id):
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['DELETE'])
 @login_required
 def delete_bookmark(bookmark_id):
-    user_id = request.args.get('user_id', type=int)
+    # user_id = request.args.get('user_id', type=int)
+    user_id = current_user.id
+    
     if not user_id:
         return jsonify({'error': 'user_id required'}), 400
 
