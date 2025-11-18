@@ -1,32 +1,45 @@
-<!-- templates/home.html -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>{{ title or "LinkVault API" }}</title>
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: black;
-            margin: 0;
-        }
-        h1 {
-            color: #c1e328;
-            font-size: 60px;
-            text-align: center;
-            border: 3px solid #c1e328;
-            display: inline-block;
-            padding: 20px 40px;
-            border-radius: 15px;
-            box-shadow: 0 0 20px rgba(0, 128, 0, 0.5);
-            margin: 100px auto;
-        }
-    </style>
-</head>
-<body>
-    <h1>{{ message or "Welcome to LinkVault API" }}</h1>
-</body>
-</html>
+{% extends 'welcome_base.html' %}
+
+{% block title %}Dashboard | LinkVault{% endblock %}
+
+{% block content %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='dist/output.css') }}" />
+
+<!-- Hero Section for Logged-in User -->
+<section class="min-h-screen flex flex-col items-center justify-center text-center px-3">
+  <h1 class="text-5xl font-extrabold mb-4 text-lime-400">
+    Hello, {{ username }} 👋
+  </h1>
+  <p class="text-lg text-gray-300 max-w-2xl mb-10">
+    Welcome back to <span class="text-lime-400 font-semibold">LinkVault</span> — your secure vault for managing bookmarks, tags, and saved resources.
+  </p>
+
+  <div class="flex flex-row items-center justify-center gap-8 max-w-5xl w-full mt-10">
+
+    <!-- Bookmarks Card -->
+    <a href="{{ url_for('bookmarks_api.dashboard2') }}" class="p-8 rounded-2xl bg-[#111] border border-gray-800 hover:border-lime-400 transition shadow-lg neon-hover text-left">
+      <h3 class="text-2xl font-semibold mb-3 text-lime-300">🔖 Your Bookmarks</h3>
+      <p class="text-gray-400">View and manage all your saved links in one place.</p>
+    </a>
+
+    <!-- Tags Card -->
+    <a href="{{ url_for('bookmarks_api.list_tags') }}" class="p-8 rounded-2xl bg-[#111] border border-gray-800 hover:border-lime-400 transition shadow-lg neon-hover text-left">
+      <h3 class="text-2xl font-semibold mb-3 text-lime-300">🏷️ Tags</h3>
+      <p class="text-gray-400">Organize your bookmarks smarter using custom tags.</p>
+    </a>
+
+
+  </div>
+
+  <!-- CTA Section Below -->
+  <div class="mt-20 text-center">
+    <h2 class="text-3xl font-bold text-lime-400 mb-4">Your LinkVault is ready!</h2>
+    <p class="text-gray-400 mb-8">Start organizing your digital world more efficiently.</p>
+    <a href="{{ url_for('bookmarks_api.dashboard2') }}" class="px-10 py-4 bg-lime-500 text-black font-semibold rounded-xl hover:bg-lime-400 transition text-lg">
+      Go to Bookmarks
+    </a>
+  </div>
+</section>
+
+{% endblock %}
