@@ -66,3 +66,14 @@ start my_bookmarks.html
 <!-- Document which states functionalities of project -->
 
 
+python linkvault_client.py signup --name "Test User" --email "test@gmail.com" --username testcli --password test123
+python linkvault_client.py login --username testcli --password test123
+python linkvault_client.py create "https://example.com" --title "Example"
+python linkvault_client.py create "https://google.com" --tags search,tech
+python linkvault_client.py list --format-json
+python linkvault_client.py update 1 --notes "Updated note"
+python linkvault_client.py get 1 --format-json
+python linkvault_client.py qr 1
+python linkvault_client.py export bookmarks.html
+python linkvault_client.py delete 1
+python linkvault_client.py logout

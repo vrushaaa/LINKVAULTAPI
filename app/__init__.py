@@ -5,37 +5,24 @@ from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from config import Config
 import os
-from flask_mail import Mail
 
-
-# === DECLARE db & migrate FIRST ===
 db = SQLAlchemy()
 migrate = Migrate()
 bcrypt = Bcrypt()
 login_manager = LoginManager()
-mail = Mail()
 
 def create_app():
     app = Flask(__name__)
     
     app.config.from_object(Config)
 
-    app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-    app.config['MAIL_PORT'] = 587
-    app.config['MAIL_USE_TLS'] = True
-    app.config['MAIL_USERNAME'] = 'linkvault6@gmail.com'
-    app.config['MAIL_PASSWORD'] = 'linkvault@123'
-
     app.config['SECRET_KEY'] = 'your-secret-key'
-
-
 
     db.init_app(app)
     migrate.init_app(app, db)
     bcrypt.init_app(app)
     login_manager.init_app(app)
 
-    mail.init_app(app)
     
     @login_manager.user_loader
     def load_user(user_id):
@@ -55,11 +42,6 @@ def create_app():
     app.register_blueprint(bookmark_bp, url_prefix='/api')
     app.register_blueprint(user_bp, url_prefix='/api/users')
     app.register_blueprint(short_bp)
-
-    # @app.route('/')
-    # def welcome():
-    #     from flask import render_template
-    #     return render_template('landing.html'), 200
 
     # auto update tag_user_bookmark.bookmark_count
     from sqlalchemy import event
@@ -112,7 +94,7 @@ def create_app():
             )
 
         session.commit()
- # ✅ Added below lines for authentication support
+
     from app.auth.auth import auth  # added auth blueprint import
     app.register_blueprint(auth, url_prefix='/auth')  # registered auth blueprint
     app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")  # added secret key for sessions
@@ -129,6 +111,5 @@ def create_app():
         return 'http://127.0.0.1:5000/' + url
     app.jinja_env.globals.update(short_http_url=short_http_url)
 
-    
 
     return app

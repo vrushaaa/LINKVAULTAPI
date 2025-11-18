@@ -4,8 +4,6 @@ from flask_login import UserMixin
 from itsdangerous import URLSafeTimedSerializer
 from flask import current_app
 
-
-
 class User(UserMixin, db.Model):
     __tablename__ = 'user'
 
@@ -38,22 +36,3 @@ class User(UserMixin, db.Model):
 
     def __repr__(self):
         return f'<User {self.username}>'
-    
-    # def generate_reset_token(self):
-    #     """Generate password reset token"""
-    #     serializer = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
-    #     return serializer.dumps(self.email, salt='password-reset-salt')
-
-    # @staticmethod
-    # def verify_reset_token(token, expiration=3600):
-    #     """Verify password reset token"""
-    #     serializer = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
-    #     try:
-    #         email = serializer.loads(
-    #             token,
-    #             salt='password-reset-salt',
-    #             max_age=expiration
-    #         )
-    #         return User.query.filter_by(email=email).first()
-    #     except:
-    #         return None

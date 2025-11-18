@@ -25,28 +25,7 @@ def home():
     # Check if user is already logged in
     if current_user.is_authenticated:
         return redirect(url_for('bookmarks_api.dashboard'))
-
     return render_template('landing.html'), 200
-
-# # short url redirect
-# @short_bp.route('/<short_code>')
-# def redirect_short(short_code):   
-#     bookmark = Bookmark.query.filter_by(short_url=short_code).first_or_404()
-#     bookmark.updated_at = datetime.utcnow()
-#     db.session.commit()
-#     return redirect(bookmark.url)
-
-# title extraction using web scrapping
-def extract_title(url):
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers, timeout=8)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        title_tag = soup.find('title')
-        return title_tag.get_text(strip=True) if title_tag else None
-    except Exception:
-        return None
     
 def extract_meta_keywords(url):
     try:
@@ -77,27 +56,14 @@ def extract_meta_keywords(url):
 @bp.route('/', methods=['GET'])
 @login_required
 def dashboard():
-    # username = session.get("username")
-    # return render_template('welcome.html', username=username), 200
-
     # Get username from Flask-Login's current_user
     username = current_user.username
     user_id = current_user.id
     total_bookmarks = UserBookmark.query.filter_by(user_id=user_id).count()
     archived_bookmarks = UserBookmark.query.filter_by(user_id=user_id, archived=True).count()
-    
-    # return render_template(
-    #     'welcome.html', 
-    #     username=username,
-    #     total_bookmarks=total_bookmarks,
-    #     archived_bookmarks=archived_bookmarks
-    # ), 200
 
     return render_template('welcome.html',username=username), 200
 
-# #bookmark creation route
-# =======
-#     return render_template('welcome.html'), 200
 
 # short url redirect
 @short_bp.route('/<short_code>')
@@ -118,7 +84,6 @@ def extract_title(url):
         return title_tag.get_text(strip=True) if title_tag else None
     except Exception:
         return None
-
 
 # bookmark creation route
 @bp.route('/bookmarks', methods=['POST'])
@@ -246,7 +211,6 @@ def update_bookmark(bookmark_id):
 
     if 'tags' in data:
 
-
         db.session.execute(
             tag_user_bookmarks.delete().where(
                 tag_user_bookmarks.c.bookmark_id == bookmark_id,
@@ -301,23 +265,6 @@ def toggle_archive(bookmark_id):
     }), 200
 
 # delete bookmark
-# @bp.route('/bookmarks/<int:bookmark_id>', methods=['DELETE'])
-# @login_required
-# def delete_bookmark(bookmark_id):
-#     user_id = request.args.get('user_id', type=int)
-#     if not user_id:
-#         return jsonify({'error': 'user_id required'}), 400
-
-#     ub = UserBookmark.query.filter_by(user_id=user_id, bookmark_id=bookmark_id).first()
-#     if not ub:
-#         return jsonify({'error': 'Not found or access denied'}), 404
-
-#     db.session.delete(ub)
-#     db.session.commit()
-
-#     return jsonify({'message': 'Bookmark removed'}), 200
-
-# delete bookmark
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['DELETE'])
 @login_required
 def delete_bookmark(bookmark_id):
@@ -352,7 +299,6 @@ def delete_bookmark(bookmark_id):
         db.session.rollback()
         return jsonify({'error': 'Failed to delete bookmark', 'details': str(e)}), 500
     
-
 # export bookmark
 @bp.route('/export', methods=['GET'])
 @login_required
@@ -370,80 +316,228 @@ def export_bookmarks():
     ist = pytz.timezone('Asia/Kolkata')
     
     html = """<!DOCTYPE NETSCAPE-Bookmark-file-1>
-<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
-<TITLE>LinkVault Export</TITLE>
+                <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+                <TITLE>LinkVault Export</TITLE>
 
-<style>
-    body {
-        font-family: Arial, sans-serif;
-        background: #F9FAFB;
-        color: #1F2937;
-        padding: 20px;
-        line-height: 1.6;
-    }
+            <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
 
-    .header-title {
-        font-size: 32px;
-        font-weight: bold;
-        color: #4F46E5;
-        margin-bottom: 20px;
-    }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+                background: #000000;
+                background-image: radial-gradient(circle at 20% 50%, rgba(180, 255, 57, 0.05) 0%, transparent 50%),
+                                radial-gradient(circle at 80% 80%, rgba(193, 227, 40, 0.05) 0%, transparent 50%);
+                min-height: 100vh;
+                padding: 48px 20px;
+                line-height: 1.6;
+                color: #ffffff;
+            }
 
-    .bookmark-container {
-        background: #FFFFFF;
-        border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 20px;
-        box-shadow: 0px 3px 10px rgba(0,0,0,0.08);
-        border-left: 5px solid #6366F1;
-    }
+            .container {
+                max-width: 1152px;
+                margin: 0 auto;
+            }
 
-    .bookmark-link {
-        font-size: 18px;
-        font-weight: bold;
-        color: #4F46E5;
-        text-decoration: none;
-    }
+            .header-section {
+                margin-bottom: 32px;
+                padding-bottom: 24px;
+                border-bottom: 1px solid #1f1f1f;
+            }
 
-    .bookmark-link:hover {
-        text-decoration: underline;
-    }
+            .header-title {
+                font-size: 42px;
+                font-weight: 700;
+                color: #b4ff39;
+                margin-bottom: 8px;
+                letter-spacing: -0.5px;
+            }
 
-    .bookmark-tags {
-        font-size: 14px;
-        color: #10B981;
-        margin-top: 5px;
-    }
+            .header-subtitle {
+                color: #9ca3af;
+                font-size: 16px;
+                font-weight: 400;
+            }
 
-    .bookmark-notes {
-        margin-top: 10px;
-        font-size: 14px;
-        color: #4B5563;
-    }
+            DL {
+                display: block;
+                width: 100%;
+            }
 
-    .timestamp {
-        font-size: 12px;
-        color: #6B7280;
-        margin-top: 8px;
-    }
-</style>
+            DT {
+                margin-bottom: 24px;
+            }
 
-<H1 class="header-title">LinkVault Bookmark Export</H1>
-<DL><p>
+            .bookmark-card {
+                display: block;
+                background: #111111;
+                border: 1px solid #1f1f1f;
+                border-radius: 16px;
+                padding: 24px;
+                margin-bottom: 24px;
+                text-decoration: none;
+                transition: all 0.3s ease;
+                backdrop-filter: blur(8px);
+            }
+
+            .bookmark-card:hover {
+                border-color: rgba(193, 227, 40, 0.6);
+                box-shadow: 0 0 15px rgba(193, 227, 40, 0.15);
+                transform: translateY(-2px);
+            }
+
+            .bookmark-title {
+                font-size: 24px;
+                font-weight: 600;
+                color: #ffffff;
+                margin-bottom: 12px;
+                display: block;
+            }
+
+            .bookmark-url {
+                color: #9ca3af;
+                font-size: 16px;
+                word-break: break-all;
+                display: block;
+                margin-bottom: 8px;
+                text-decoration: none;
+            }
+
+            .bookmark-url:hover {
+                color: #c1e328;
+            }
+
+            .bookmark-url::before {
+                content: "🔗 ";
+            }
+
+            .bookmark-tags {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-top: 12px;
+            }
+
+            .tag {
+                background: #263a19;
+                color: #b4ff39;
+                padding: 4px 12px;
+                border-radius: 9999px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+
+            DD {
+                background: rgba(17, 17, 17, 0.6);
+                padding: 16px 24px;
+                border-radius: 12px;
+                font-size: 14px;
+                color: #d1d5db;
+                line-height: 1.6;
+                border-left: 3px solid #263a19;
+                margin-bottom: 24px;
+                margin-left: 0;
+            }
+
+            DD::before {
+                content: "Notes: ";
+                color: #9ca3af;
+                font-weight: 600;
+            }
+
+            .timestamp {
+                font-size: 12px;
+                color: #6b7280;
+                margin-top: 8px;
+            }
+
+            /* Responsive design */
+            @media (max-width: 768px) {
+                body {
+                    padding: 24px 16px;
+                }
+
+                .header-title {
+                    font-size: 32px;
+                }
+
+                .bookmark-card {
+                    padding: 20px;
+                }
+
+                .bookmark-title {
+                    font-size: 20px;
+                }
+            }
+
+            /* Print styles */
+            @media print {
+                body {
+                    background: white;
+                    color: black;
+                }
+
+                .header-title {
+                    color: #000000;
+                }
+
+                .bookmark-card {
+                    background: white;
+                    border: 1px solid #e5e7eb;
+                    box-shadow: none;
+                }
+
+                .bookmark-card:hover {
+                    transform: none;
+                }
+
+                .bookmark-title {
+                    color: #000000;
+                }
+
+                .tag {
+                    background: #e5e7eb;
+                    color: #000000;
+                }
+
+                DD {
+                    background: #f3f4f6;
+                    color: #000000;
+                }
+            }
+        </style>
+
+<div class="container">
+    <div class="header-section">
+        <h1 class="header-title">Your Bookmarks</h1>
+        <p class="header-subtitle">Exported on """ + datetime.now().strftime('%B %d, %Y at %I:%M %p IST') + """</p>
+    </div>
+    <DL><p>
 """
 
     for b in bookmarks:
         ub = UserBookmark.query.filter_by(bookmark_id=b.id, user_id=user_id).first()
-        notes = ub.notes if ub else ""
         tags = ",".join(t.name for t in b.tags)
         title = (ub.title if ub else b.url).replace('&', '&amp;').replace('<', '&lt;')
         created_ist = (ub.created_at if ub else b.created_at).replace(tzinfo=pytz.UTC).astimezone(ist)
         add_date = int(created_ist.timestamp())
-        html += f'    <DT><A HREF="{b.url}" ADD_DATE="{add_date}" TAGS="{tags}">{title}</A>\n'
-        if notes:
-            html += f'    <DD>{notes.replace("&", "&amp;")}</DD>\n'
-
-    html += "</DL><p>"
+        
+        html += f'    <DT><A HREF="{b.url}" ADD_DATE="{add_date}" TAGS="{tags}" class="bookmark-card">\n'
+        html += f'        <span class="bookmark-title">{title}</span>\n'
+        html += f'        <span class="bookmark-url">{b.url}</span>\n'
+        
+        if tags:
+            html += f'        <div class="bookmark-tags">\n'
+            for tag in tags.split(','):
+                html += f'            <span class="tag">{tag.strip()}</span>\n'
+            html += f'        </div>\n'
+        
+        html += f'    </A></DT>\n'
+    html += """    </DL></p>
+</div>"""
 
     return Response(
         html,
@@ -451,11 +545,9 @@ def export_bookmarks():
         headers={"Content-Disposition": f"attachment;filename=linkvault_user{user_id}_{datetime.now().strftime('%Y%m%d')}.html"}
     )
 
-
 @bp.route('/tags', methods=['GET'])
 @login_required
 def list_tags():
-    """List all tags with counts - supports both JSON API and HTML rendering"""
     user_id = current_user.id
     
     # Count actual tag occurrences for this user
@@ -484,7 +576,6 @@ def list_tags():
     
     # Otherwise render HTML template
     return render_template('tags.html', tags=tags, username=current_user.username)
-
 
 @bp.route('/bookmarks', methods=['GET'])
 @login_required
