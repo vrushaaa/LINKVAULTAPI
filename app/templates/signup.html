@@ -12,6 +12,7 @@
   <title>LinkVault | Create Account</title>
   <!-- <script src="https://cdn.tailwindcss.com"></script> -->
    <link rel="stylesheet" href="{{ url_for('static', filename='dist/output.css') }}" />
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <style>
     body {
       background-color: #111; /* Dark background */
@@ -53,8 +54,14 @@
         <input type="email" name="email" placeholder="Email" required
                class="w-full bg-transparent border border-gray-700 rounded-md px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-lime-400" />
 
-        <input type="password" name="password" placeholder="Password" required
-               class="w-full bg-transparent border border-gray-700 rounded-md px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-lime-400" />
+        <div class="relative w-full">
+          <input type="password" id="password" name="password" placeholder="Password" required
+            class="w-full bg-transparent border border-gray-700 rounded-md px-4 py-2 pr-12 text-white focus:outline-none focus:ring-2 focus:ring-lime-400" />
+        
+          <button type="button" id="togglePassword" class="absolute top-1/2 -translate-y-1/2 right-4 text-gray-400 mt-2">
+            <i class="fa-solid fa-eye"></i>
+          </button>
+        </div>
 
         <button type="submit"
                 class="w-full bg-lime-400 hover:bg-lime-500 text-black font-semibold rounded-md py-2 mt-2 transition">
@@ -71,4 +78,23 @@
   </div>
 </body>
 </html>
+
+<script>
+  const togglePassword = document.getElementById('togglePassword');
+  const passwordField = document.getElementById('password');
+
+  togglePassword.addEventListener('click', () => {
+    const type = passwordField.getAttribute('type') === 'password'
+      ? 'text'
+      : 'password';
+
+    passwordField.setAttribute('type', type);
+
+    // Swap icon
+    togglePassword.innerHTML =
+      type === 'password'
+        ? '<i class="fa-solid fa-eye"></i>'
+        : '<i class="fa-solid fa-eye-slash"></i>';
+  });
+</script>
 {% endblock %}
