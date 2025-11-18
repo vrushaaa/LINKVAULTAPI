@@ -51,7 +51,6 @@ def create_user():
         db.session.rollback()
         return jsonify({'error': 'Database error: could not create user'}), 500
 
-
 @user_bp.route('/<int:user_id>/bookmarks', methods=['GET'])
 def get_user_bookmarks(user_id):
     user = User.query.get(user_id)
@@ -92,7 +91,6 @@ def get_user_bookmarks(user_id):
         }), 200
     except Exception as e:
         return jsonify({'error': 'Failed to retrieve bookmarks', 'details': str(e)}), 500
-
 
 # Error handling
 @user_bp.errorhandler(400)

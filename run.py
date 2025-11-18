@@ -2,10 +2,7 @@
 import os
 import sys
 
-# Ensure THIS project is found FIRST when importing 'app'
-# PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
-# sys.path.insert(0, PROJECT_ROOT)
-# Ensure this project is imported first
+password = os.getenv("MAIL_PASSWORD")
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from app import create_app

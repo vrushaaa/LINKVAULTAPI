@@ -76,7 +76,7 @@ migrations/
 
 # CLI script (optional — keep if team uses it)
 # linkvault
-
+app/cli/*.html
 
 # Tailwind output files (generated automatically)
 app/static/dist/

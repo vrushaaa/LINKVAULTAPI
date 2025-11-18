@@ -1,6 +1,8 @@
 from app import db
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
+from itsdangerous import URLSafeTimedSerializer
+from flask import current_app
 
 class User(UserMixin, db.Model):
     __tablename__ = 'user'

@@ -1,5 +1,4 @@
 <head>
-  <!-- <script src="https://cdn.tailwindcss.com"></script> -->
   <link
     rel="stylesheet"
     href="{{url_for('static' ,filename='dist/output.css')}}"
@@ -20,7 +19,11 @@
     </div>
 
     <!-- heading -->
-    <h1 class="text-5xl font-bold">404 – {{message}}</h1>
+    <h1 class="text-5xl font-bold">{{SCode}} -  {{message}}</h1>
+
+    {% if subMessage %}
+    <p class="text-xl text-[#a8d135] mt-2">{{ subMessage }}</p>
+    {% endif %}
 
     <!-- message -->
     <p class="text-2xl mt-10">Looks like this link got lost in the vault.</p>
@@ -28,6 +31,7 @@
     <!-- button -->
     <button
       class="bg-black border border-[#c1e328] text-[#c1e328] px-6 py-3 rounded-lg hover:bg-[#c1e328] hover:text-black mt-8 transition"
+      onclick="window.location.href='{{ url_for('bookmarks_api.dashboard2') }}'"
     >
       Show All Bookmarks
     </button>

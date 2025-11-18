@@ -25,53 +25,45 @@ def home():
     # Check if user is already logged in
     if current_user.is_authenticated:
         return redirect(url_for('bookmarks_api.dashboard'))
-
     return render_template('landing.html'), 200
-
-# short url redirect
-# @short_bp.route('/<short_code>')
-# def redirect_short(short_code):   
-#     bookmark = Bookmark.query.filter_by(short_url=short_code).first_or_404()
-#     bookmark.updated_at = datetime.utcnow()
-#     db.session.commit()
-#     return redirect(bookmark.url)
-
-# title extraction using web scrapping
-def extract_title(url):
+    
+def extract_meta_keywords(url):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers, timeout=8)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        title_tag = soup.find('title')
-        return title_tag.get_text(strip=True) if title_tag else None
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(url, headers=headers, timeout=6)
+        resp.raise_for_status()
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Find meta keywords tag
+        meta_tag = soup.find("meta", attrs={"name": "keywords"})
+        if not meta_tag:
+            return []
+
+        content = meta_tag.get("content")
+        if not content:
+            return []
+
+        # Convert comma-separated string → list of tags
+        tags = [kw.strip().lower() for kw in content.split(",") if kw.strip()]
+
+        return tags
+
     except Exception:
-        return None
+        return []
+    
 
 @bp.route('/', methods=['GET'])
 @login_required
 def dashboard():
-    # username = session.get("username")
-    # return render_template('welcome.html', username=username), 200
-
     # Get username from Flask-Login's current_user
     username = current_user.username
     user_id = current_user.id
     total_bookmarks = UserBookmark.query.filter_by(user_id=user_id).count()
     archived_bookmarks = UserBookmark.query.filter_by(user_id=user_id, archived=True).count()
-    
-    # return render_template(
-    #     'welcome.html', 
-    #     username=username,
-    #     total_bookmarks=total_bookmarks,
-    #     archived_bookmarks=archived_bookmarks
-    # ), 200
 
     return render_template('welcome.html',username=username), 200
 
-# #bookmark creation route
-# =======
-#     return render_template('welcome.html'), 200
 
 # short url redirect
 @short_bp.route('/<short_code>')
@@ -93,97 +85,7 @@ def extract_title(url):
     except Exception:
         return None
 
-# create bookmark
-# =======
-# @bp.route('/bookmarks', methods=['POST'])
-# @login_required
-# def create_bookmark():
-#     data = request.get_json()
-#     url = data.get('url')
-#     user_id = current_user.id
-#     notes = data.get('notes', '')
-#     tags = data.get('tags', [])
-#     archived = data.get('archived', False)
-#     title = data.get('title')
-
-#     if not url or not user_id:
-#         return jsonify({'error': 'url and user_id required'}), 400
-
-#     user = User.query.get(user_id)
-#     if not user:
-#         return jsonify({'error': 'User not found'}), 404
-
-#     norm_url = normalize_url(url)
-#     url_hash = generate_url_hash(norm_url)
-#     existing = Bookmark.query.filter_by(hash_url=url_hash).first()
-
-#     if existing:
-#         stmt = db.select(UserBookmark).where(
-#             UserBookmark.user_id == user_id,
-#             UserBookmark.bookmark_id == existing.id
-#         )
-#         if db.session.execute(stmt).scalar():
-#             return jsonify({'error': 'You already saved this link'}), 409
-#         bookmark = existing
-#     else:
-#         bookmark = Bookmark(url=norm_url)
-#         bookmark.set_hash()
-#         bookmark.set_short_url()
-#         db.session.add(bookmark)
-#         db.session.flush()
-
-#         if not title:
-#             title = extract_title(norm_url) or "Untitled Link"
-
-#     # Create or update UserBookmark
-#     ub = UserBookmark.query.filter_by(user_id=user_id, bookmark_id=bookmark.id).first()
-#     if not ub:
-#         ub = UserBookmark(
-#             user_id=user_id,
-#             bookmark_id=bookmark.id,
-#             title=title,
-#             notes=notes,
-#             archived=archived
-#         )
-#         db.session.add(ub)
-#     else:
-#         ub.title = title
-#         ub.notes = notes
-#         ub.archived = archived
-
-#     # Handle tags via tag_user_bookmarks (count auto-updated by event)
-#     if tags:
-#         db.session.execute(
-#             tag_user_bookmarks.delete().where(
-#                 tag_user_bookmarks.c.bookmark_id == bookmark.id,
-#                 tag_user_bookmarks.c.user_id == user_id
-#             )
-#         )
-#         for tag_name in tags:
-#             tag_name = tag_name.strip().lower()
-#             if tag_name:
-#                 tag = Tag.query.filter_by(name=tag_name).first()
-#                 if not tag:
-#                     tag = Tag(name=tag_name)
-#                     db.session.add(tag)
-#                     db.session.flush()
-#                 db.session.execute(
-#                     tag_user_bookmarks.insert().values(
-#                         tag_id=tag.id,
-#                         user_id=user_id,
-#                         bookmark_id=bookmark.id
-#                         # ← NO bookmark_count=1
-#                     )
-#                 )
-
-#     db.session.commit()
-
-#     return jsonify({
-#         'message': 'Bookmark saved successfully',
-#         'bookmark': bookmark.to_dict(user_id=user_id)
-#     }), 201
-
-
+# bookmark creation route
 @bp.route('/bookmarks', methods=['POST'])
 @login_required
 def create_bookmark():
@@ -201,6 +103,11 @@ def create_bookmark():
     norm_url = normalize_url(url)
     url_hash = generate_url_hash(norm_url)
     existing = Bookmark.query.filter_by(hash_url=url_hash).first()
+
+    if not tags:  
+        auto_tags = extract_meta_keywords(norm_url)
+        if auto_tags:
+            tags = auto_tags
 
     if existing:
         # Check if user already has this bookmark
@@ -267,7 +174,7 @@ def create_bookmark():
 def get_bookmark(bookmark_id):
     bookmark = Bookmark.query.get(bookmark_id)
     if not bookmark:
-        return jsonify({'error': 'Bookmark not found'}), 404
+        return render_template('noBookmark.html',message='Bookmark not found', SCode=404) , 404
     user_id = request.args.get('user_id', type=int)
     return jsonify(bookmark.to_dict(user_id=user_id)), 200
 
@@ -304,13 +211,12 @@ def update_bookmark(bookmark_id):
 
     if 'tags' in data:
 
-
-        # db.session.execute(
-        #     tag_user_bookmarks.delete().where(
-        #         tag_user_bookmarks.c.bookmark_id == bookmark_id,
-        #         tag_user_bookmarks.c.user_id == user_id
-        #     )
-        # )
+        db.session.execute(
+            tag_user_bookmarks.delete().where(
+                tag_user_bookmarks.c.bookmark_id == bookmark_id,
+                tag_user_bookmarks.c.user_id == user_id
+            )
+        )
         for tag_name in data.get('tags', []):
             tag_name = tag_name.strip().lower()
             if tag_name:
@@ -359,23 +265,6 @@ def toggle_archive(bookmark_id):
     }), 200
 
 # delete bookmark
-# @bp.route('/bookmarks/<int:bookmark_id>', methods=['DELETE'])
-# @login_required
-# def delete_bookmark(bookmark_id):
-#     user_id = request.args.get('user_id', type=int)
-#     if not user_id:
-#         return jsonify({'error': 'user_id required'}), 400
-
-#     ub = UserBookmark.query.filter_by(user_id=user_id, bookmark_id=bookmark_id).first()
-#     if not ub:
-#         return jsonify({'error': 'Not found or access denied'}), 404
-
-#     db.session.delete(ub)
-#     db.session.commit()
-
-#     return jsonify({'message': 'Bookmark removed'}), 200
-
-# delete bookmark
 @bp.route('/bookmarks/<int:bookmark_id>', methods=['DELETE'])
 @login_required
 def delete_bookmark(bookmark_id):
@@ -410,12 +299,13 @@ def delete_bookmark(bookmark_id):
         db.session.rollback()
         return jsonify({'error': 'Failed to delete bookmark', 'details': str(e)}), 500
     
-
 # export bookmark
 @bp.route('/export', methods=['GET'])
 @login_required
 def export_bookmarks():
-    user_id = request.args.get('user_id', type=int)
+    # user_id = request.args.get('user_id', type=int)
+    user_id = current_user.id
+
     if not user_id:
         return jsonify({'error': 'user_id required'}), 400
 
@@ -424,24 +314,230 @@ def export_bookmarks():
         return jsonify({'error': 'No bookmarks found'}), 404
 
     ist = pytz.timezone('Asia/Kolkata')
+    
     html = """<!DOCTYPE NETSCAPE-Bookmark-file-1>
-<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
-<TITLE>LinkVault Export</TITLE>
-<H1>LinkVault Bookmarks</H1>
-<DL><p>\n"""
+                <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+                <TITLE>LinkVault Export</TITLE>
+
+            <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+                background: #000000;
+                background-image: radial-gradient(circle at 20% 50%, rgba(180, 255, 57, 0.05) 0%, transparent 50%),
+                                radial-gradient(circle at 80% 80%, rgba(193, 227, 40, 0.05) 0%, transparent 50%);
+                min-height: 100vh;
+                padding: 48px 20px;
+                line-height: 1.6;
+                color: #ffffff;
+            }
+
+            .container {
+                max-width: 1152px;
+                margin: 0 auto;
+            }
+
+            .header-section {
+                margin-bottom: 32px;
+                padding-bottom: 24px;
+                border-bottom: 1px solid #1f1f1f;
+            }
+
+            .header-title {
+                font-size: 42px;
+                font-weight: 700;
+                color: #b4ff39;
+                margin-bottom: 8px;
+                letter-spacing: -0.5px;
+            }
+
+            .header-subtitle {
+                color: #9ca3af;
+                font-size: 16px;
+                font-weight: 400;
+            }
+
+            DL {
+                display: block;
+                width: 100%;
+            }
+
+            DT {
+                margin-bottom: 24px;
+            }
+
+            .bookmark-card {
+                display: block;
+                background: #111111;
+                border: 1px solid #1f1f1f;
+                border-radius: 16px;
+                padding: 24px;
+                margin-bottom: 24px;
+                text-decoration: none;
+                transition: all 0.3s ease;
+                backdrop-filter: blur(8px);
+            }
+
+            .bookmark-card:hover {
+                border-color: rgba(193, 227, 40, 0.6);
+                box-shadow: 0 0 15px rgba(193, 227, 40, 0.15);
+                transform: translateY(-2px);
+            }
+
+            .bookmark-title {
+                font-size: 24px;
+                font-weight: 600;
+                color: #ffffff;
+                margin-bottom: 12px;
+                display: block;
+            }
+
+            .bookmark-url {
+                color: #9ca3af;
+                font-size: 16px;
+                word-break: break-all;
+                display: block;
+                margin-bottom: 8px;
+                text-decoration: none;
+            }
+
+            .bookmark-url:hover {
+                color: #c1e328;
+            }
+
+            .bookmark-url::before {
+                content: "🔗 ";
+            }
+
+            .bookmark-tags {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-top: 12px;
+            }
+
+            .tag {
+                background: #263a19;
+                color: #b4ff39;
+                padding: 4px 12px;
+                border-radius: 9999px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+
+            DD {
+                background: rgba(17, 17, 17, 0.6);
+                padding: 16px 24px;
+                border-radius: 12px;
+                font-size: 14px;
+                color: #d1d5db;
+                line-height: 1.6;
+                border-left: 3px solid #263a19;
+                margin-bottom: 24px;
+                margin-left: 0;
+            }
+
+            DD::before {
+                content: "Notes: ";
+                color: #9ca3af;
+                font-weight: 600;
+            }
+
+            .timestamp {
+                font-size: 12px;
+                color: #6b7280;
+                margin-top: 8px;
+            }
+
+            /* Responsive design */
+            @media (max-width: 768px) {
+                body {
+                    padding: 24px 16px;
+                }
+
+                .header-title {
+                    font-size: 32px;
+                }
+
+                .bookmark-card {
+                    padding: 20px;
+                }
+
+                .bookmark-title {
+                    font-size: 20px;
+                }
+            }
+
+            /* Print styles */
+            @media print {
+                body {
+                    background: white;
+                    color: black;
+                }
+
+                .header-title {
+                    color: #000000;
+                }
+
+                .bookmark-card {
+                    background: white;
+                    border: 1px solid #e5e7eb;
+                    box-shadow: none;
+                }
+
+                .bookmark-card:hover {
+                    transform: none;
+                }
+
+                .bookmark-title {
+                    color: #000000;
+                }
+
+                .tag {
+                    background: #e5e7eb;
+                    color: #000000;
+                }
+
+                DD {
+                    background: #f3f4f6;
+                    color: #000000;
+                }
+            }
+        </style>
+
+<div class="container">
+    <div class="header-section">
+        <h1 class="header-title">Your Bookmarks</h1>
+        <p class="header-subtitle">Exported on """ + datetime.now().strftime('%B %d, %Y at %I:%M %p IST') + """</p>
+    </div>
+    <DL><p>
+"""
 
     for b in bookmarks:
         ub = UserBookmark.query.filter_by(bookmark_id=b.id, user_id=user_id).first()
-        notes = ub.notes if ub else ""
         tags = ",".join(t.name for t in b.tags)
         title = (ub.title if ub else b.url).replace('&', '&amp;').replace('<', '&lt;')
         created_ist = (ub.created_at if ub else b.created_at).replace(tzinfo=pytz.UTC).astimezone(ist)
         add_date = int(created_ist.timestamp())
-        html += f'    <DT><A HREF="{b.url}" ADD_DATE="{add_date}" TAGS="{tags}">{title}</A>\n'
-        if notes:
-            html += f'    <DD>{notes.replace("&", "&amp;")}</DD>\n'
-
-    html += "</DL><p>"
+        
+        html += f'    <DT><A HREF="{b.url}" ADD_DATE="{add_date}" TAGS="{tags}" class="bookmark-card">\n'
+        html += f'        <span class="bookmark-title">{title}</span>\n'
+        html += f'        <span class="bookmark-url">{b.url}</span>\n'
+        
+        if tags:
+            html += f'        <div class="bookmark-tags">\n'
+            for tag in tags.split(','):
+                html += f'            <span class="tag">{tag.strip()}</span>\n'
+            html += f'        </div>\n'
+        
+        html += f'    </A></DT>\n'
+    html += """    </DL></p>
+</div>"""
 
     return Response(
         html,
@@ -449,78 +545,9 @@ def export_bookmarks():
         headers={"Content-Disposition": f"attachment;filename=linkvault_user{user_id}_{datetime.now().strftime('%Y%m%d')}.html"}
     )
 
-# list tags with count
-# @bp.route('/tags', methods=['GET'])
-# def list_tags():
-#     # user_id = request.args.get('user_id', type=int)
-#     user_id = current_user.id
-
-#     if not user_id:
-#         return jsonify({'error': 'user_id required'}), 400
-
-#     # Subquery: max bookmark_count per tag for this user
-#     subq = db.select(
-#         tag_user_bookmarks.c.tag_id,
-#         db.func.max(tag_user_bookmarks.c.bookmark_count).label('cnt')
-#     ).where(
-#         tag_user_bookmarks.c.user_id == user_id
-#     ).group_by(tag_user_bookmarks.c.tag_id).subquery()
-
-#     # Join with Tag, filter count > 0
-#     tags = db.session.query(
-#         Tag.name,
-#         subq.c.cnt.label('count')
-#     ).join(
-#         subq, Tag.id == subq.c.tag_id
-#     ).filter(
-#         subq.c.cnt > 0
-#     ).order_by(
-#         db.desc('count'), Tag.name
-#     ).all()
-
-#     return jsonify([{'name': n, 'count': c} for n, c in tags])
-
-
-# @bp.route('/tags', methods=['GET'])
-# @login_required
-# def list_tags():
-#     """List all tags with counts - supports both JSON API and HTML rendering"""
-#     user_id = current_user.id
-    
-#     # Subquery: max bookmark_count per tag for this user
-#     subq = db.select(
-#         tag_user_bookmarks.c.tag_id,
-#         db.func.max(tag_user_bookmarks.c.bookmark_count).label('cnt')
-#     ).where(
-#         tag_user_bookmarks.c.user_id == user_id
-#     ).group_by(tag_user_bookmarks.c.tag_id).subquery()
-
-#     # Join with Tag, filter count > 0
-#     tags_result = db.session.query(
-#         Tag.name,
-#         subq.c.cnt.label('count')
-#     ).join(
-#         subq, Tag.id == subq.c.tag_id
-#     ).filter(
-#         subq.c.cnt > 0
-#     ).order_by(
-#         db.desc('count'), Tag.name
-#     ).all()
-
-#     # Convert tuples to dictionaries
-#     tags = [{'name': name, 'count': count} for name, count in tags_result]
-
-#     # Check if request wants JSON (API call)
-#     if request.is_json or 'application/json' in request.headers.get('Accept', ''):
-#         return jsonify(tags)
-    
-#     # Otherwise render HTML template
-#     return render_template('tags.html', tags=tags, username=current_user.username)
-
 @bp.route('/tags', methods=['GET'])
 @login_required
 def list_tags():
-    """List all tags with counts - supports both JSON API and HTML rendering"""
     user_id = current_user.id
     
     # Count actual tag occurrences for this user
@@ -550,129 +577,48 @@ def list_tags():
     # Otherwise render HTML template
     return render_template('tags.html', tags=tags, username=current_user.username)
 
-# list bookmark with filtering
-# @bp.route('/bookmarks', methods=['GET'])
-# @login_required
-# def list_bookmarks():
-#     user_id = request.args.get('user_id', type=int)
-#     if not user_id:
-#         return jsonify({'error': 'user_id required'}), 400
-
-#     page = request.args.get('page', 1, type=int)
-#     per_page = min(request.args.get('per_page', 20, type=int), 100)
-#     tag = request.args.get('tag')
-#     q = request.args.get('q')
-#     archived = request.args.get('archived')
-
-#     query = db.session.query(Bookmark).join(UserBookmark).filter(UserBookmark.user_id == user_id)
-
-#     if tag:
-#         query = query.join(tag_user_bookmarks).join(Tag).filter(Tag.name == tag.lower())
-#     if q:
-#         query = query.join(UserBookmark).filter(
-#             db.or_(UserBookmark.title.ilike(f'%{q}%'), Bookmark.url.ilike(f'%{q}%'))
-#         )
-#     if archived is not None:
-#         archived_bool = archived.lower() == 'true'
-#         query = query.filter(UserBookmark.archived == archived_bool)
-
-#     total = query.count()
-#     bookmarks = query.order_by(UserBookmark.created_at.desc()) \
-#                      .offset((page-1)*per_page).limit(per_page).all()
-
-#     return jsonify({
-#         'bookmarks': [b.to_dict(user_id=user_id) for b in bookmarks],
-#         'total': total,
-#         'page': page,
-#         'per_page': per_page,
-#         'pages': (total + per_page - 1) // per_page
-#     })
-
-# @bp.route('/bookmarks', methods=['GET'])
-# @login_required
-# def list_bookmarks():
-#     user_id = request.args.get('user_id', type=int)
-#     if not user_id:
-#         if request.headers.get('Accept') == 'application/json':
-#             return jsonify({'error': 'user_id required'}), 400
-#         return render_template('noBookmark.html', message='user_id required'), 400
-
-#     page = request.args.get('page', 1, type=int)
-#     per_page = min(request.args.get('per_page', 5, type=int), 5)
-
-#     tag = request.args.get('tag')
-#     q = request.args.get('q')
-#     archived = request.args.get('archived')
-
-#     query = db.session.query(Bookmark).join(UserBookmark).filter(UserBookmark.user_id == user_id)
-
-#     if tag:
-#         query = query.join(tag_user_bookmarks).join(Tag).filter(Tag.name == tag.lower())
-#     if q:
-#         query = query.join(UserBookmark).filter(
-#             db.or_(UserBookmark.title.ilike(f'%{q}%'), Bookmark.url.ilike(f'%{q}%'))
-#         )
-#     if archived is not None:
-#         archived_bool = archived.lower() == 'true'
-#         query = query.filter(UserBookmark.archived == archived_bool)
-
-#     # pagination = query.order_by(UserBookmark.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
-#     # bookmarks = pagination.items
-
-#     total = query.count()
-#     bookmarks = query.order_by(UserBookmark.created_at.desc()) \
-#                      .offset((page-1)*per_page).limit(per_page).all()
-    
-#     bookmark_data = [b.to_dict(user_id=user_id) for b in bookmarks]
-
-#     wants_json = (
-#         request.headers.get('Accept') == 'application/json' or
-#         request.args.get('format') == 'json'
-#     )
-
-#     if wants_json:
-#         return jsonify({
-#             'bookmarks': bookmark_data,
-#             'total': total,
-#             'page': page,
-#             'per_page': per_page,
-#             'pages': (total + per_page - 1) // per_page
-#         })
-
-#     return render_template(
-#        "all_bookmarks.html",
-#         bookmarks=bookmark_data,
-#         user_id=user_id,
-#         page=page,
-#         per_page=per_page,
-#         tag=tag,
-#         q=q
-
-# )
-
-
 @bp.route('/bookmarks', methods=['GET'])
 @login_required
 def list_bookmarks():
-    """List bookmarks with filtering and pagination"""
+    """List all bookmarks with filtering (no pagination)"""
     user_id = current_user.id
-    
-    # Pagination
-    page = request.args.get('page', 1, type=int)
-    per_page = min(request.args.get('per_page', 20, type=int), 100)
-    
+
     # Filters
     tag_filter = request.args.get('tag')
     search_query = request.args.get('q')
     archived_filter = request.args.get('archived')
-    
-    # Base query
+
+    # Start base query
     query = db.session.query(Bookmark).join(
         UserBookmark
     ).filter(
         UserBookmark.user_id == user_id
     )
-    
+
+    # validate allowed query parameters
+    allowed_params = {'page', 'per_page', 'tag', 'q', 'archived', 'id'}
+    invalid_params = set(request.args.keys()) - allowed_params
+    if invalid_params:
+        mainMessage = "Invalid query parameter(s) provided."
+        subMessage = f"Invalid: {', '.join(invalid_params)}. Allowed: {', '.join(allowed_params)}"
+
+        if request.accept_mimetypes.accept_html:
+        # Render custom error page
+            return render_template(
+            'noBookmark.html',
+            SCode=400,
+            message=mainMessage,
+            subMessage=subMessage
+        ), 400
+
+    # Default JSON response
+        return jsonify({
+        'error': mainMessage,
+        'details': subMessage,
+        'correct_url_example': url_for('bookmarks_api.list_bookmarks', _external=True)
+    }), 400
+
+
     # Apply tag filter
     if tag_filter:
         query = query.join(
@@ -685,9 +631,9 @@ def list_bookmarks():
             Tag,
             Tag.id == tag_user_bookmarks.c.tag_id
         ).filter(
-            Tag.name == tag_filter.lower()
+            Tag.name.ilike(tag_filter.lower())
         )
-    
+
     # Apply search filter
     if search_query:
         search = f"%{search_query}%"
@@ -698,54 +644,43 @@ def list_bookmarks():
                 Bookmark.url.ilike(search)
             )
         )
-    
+
     # Apply archived filter
     if archived_filter is not None:
         archived_bool = archived_filter.lower() == 'true'
         query = query.filter(UserBookmark.archived == archived_bool)
-    
-    # Get total count
-    total = query.count()
-    
-    # Get paginated results
-    bookmarks = query.order_by(
-        UserBookmark.created_at.desc()
-    ).offset(
-        (page - 1) * per_page
-    ).limit(per_page).all()
-    
+
+    # Fetch all bookmarks (no pagination)
+    bookmarks = query.order_by(UserBookmark.created_at.desc()).all()
+
     # Convert to dict
     bookmark_data = [b.to_dict(user_id=user_id) for b in bookmarks]
-    
-    # Check if JSON response is requested
+
+    # JSON response
     wants_json = (
         request.headers.get('Accept') == 'application/json' or
         request.args.get('format') == 'json' or
         request.is_json
     )
-    
+
     if wants_json:
         return jsonify({
             'bookmarks': bookmark_data,
-            'total': total,
-            'page': page,
-            'per_page': per_page,
-            'pages': (total + per_page - 1) // per_page,
+            'total': len(bookmark_data),
             'current_tag': tag_filter
         }), 200
-    
+
     # Render HTML template
     return render_template(
-        'all_bookmarks.html',
+        'tag_filter.html',
         bookmarks=bookmark_data,
         user_id=user_id,
-        page=page,
-        per_page=per_page,
-        total=total,
+        total=len(bookmark_data),
         tag=tag_filter,
         q=search_query,
-        current_tag=tag_filter  # Pass selected tag to template
+        current_tag=tag_filter
     )
+
 
 @bp.route('/bookmarkstwo', methods=['GET'])
 @login_required
@@ -754,16 +689,20 @@ def dashboard2():
 
     # Pagination (optional, default all)
     page = request.args.get('page', 1, type=int)
-    per_page = 100  # you can adjust or paginate
+    per_page = 5  # you can adjust or paginate
      
     bookmarks_query = (
         db.session.query(Bookmark)
         .join(UserBookmark)
-        .filter(UserBookmark.user_id == user_id)
+        .filter(
+            UserBookmark.user_id == user_id,
+            UserBookmark.archived == False    # ⬅ hide archived bookmarks
+        )
         .order_by(UserBookmark.created_at.desc())
     )
 
     total = bookmarks_query.count()
+    total_pages = (total + per_page - 1) // per_page
     bookmarks = bookmarks_query.offset((page-1)*per_page).limit(per_page).all()
     bookmark_data = [b.to_dict(user_id=user_id) for b in bookmarks]
 
@@ -773,7 +712,8 @@ def dashboard2():
         user_id=user_id,
         page=page,
         per_page=per_page,
-        total=total
+        total=total,
+        total_pages=total_pages
     )
 
 @bp.route('/bookmarks/<int:bookmark_id>/qr', methods=['GET'])
@@ -808,16 +748,56 @@ def gen_qr(bookmark_id):
     }), 200
 
 
+@bp.route('/bookmarks/archived')
+@login_required
+def archived_bookmarks():
+    user_id = current_user.id
+    bookmarks = Bookmark.query.filter_by(user_id=user_id, archived=True).all()
+    return render_template("archived.html", bookmarks=bookmarks, user_id=user_id)
+
+@bp.route('/archived', methods=['GET'])
+@login_required
+def archived_page():
+    user_id = current_user.id
+
+    archived_query = (
+        db.session.query(Bookmark)
+        .join(UserBookmark)
+        .filter(
+            UserBookmark.user_id == user_id,
+            UserBookmark.archived == True        # only archived
+        )
+        .order_by(UserBookmark.created_at.desc())
+    )
+
+    bookmarks = archived_query.all()
+    bookmark_data = [b.to_dict(user_id=user_id) for b in bookmarks]
+
+    return render_template(
+        'archived.html',
+        bookmarks=bookmark_data,
+        user_id=user_id
+    )
+
 # error handling
+# error handling with template rendering
+from flask import request
+
 @bp.errorhandler(400)
 def bad_request(e):
+    if request.accept_mimetypes.accept_html:
+        return render_template('noBookmark.html', SCode=400, message=str(e)), 400
     return jsonify({'error': 'Bad Request', 'message': str(e)}), 400
 
 @bp.errorhandler(404)
 def not_found(e):
-    return jsonify({'error': 'Not Found'}), 404
+    if request.accept_mimetypes.accept_html:
+        return render_template('noBookmark.html', SCode=404, message='Page not found'), 404
+    return jsonify({'error': 'Not Found', 'message': str(e)}), 404
 
 @bp.errorhandler(500)
 def internal_error(e):
     db.session.rollback()
-    return jsonify({'error': 'Server Error'}), 500
+    if request.accept_mimetypes.accept_html:
+        return render_template('noBookmark.html', SCode=500, message='Internal server error'), 500
+    return jsonify({'error': 'Server Error', 'message': str(e)}), 500

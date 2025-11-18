@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}LinkVault{% endblock %}</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link
+    rel="stylesheet"
+    href="{{url_for('static' ,filename='dist/output.css')}}">
 
   <style>
     body {
@@ -58,7 +60,7 @@
           <a href="{{ url_for('short.home') }}" class="nav-link hover:text-white">Home</a>
           <a href="{{ url_for('bookmarks_api.dashboard2') }}" class="nav-link hover:text-white">Bookmarks</a>
           <a href="{{ url_for('bookmarks_api.list_tags') }}" class="nav-link hover:text-white">Tags</a>
-          <a href="#" class="nav-link hover:text-white">About</a>
+          <a href="{{ url_for('bookmarks_api.archived_page') }}" class="nav-link hover:text-white">Archived</a>
         </div>
 
         <div class="flex items-center space-x-4">
@@ -75,15 +77,9 @@
   </nav>
 
   <!-- 🔹 MAIN PAGE CONTENT -->
-  <main class="flex-1 px-6 py-10 mt-20">
+  <main class="flex-1 px-6 mt-8">
     {% block content %}
     {% endblock %}
   </main>
-
-  <!-- ⚙️ FOOTER -->
-  <footer class="bg-[#0c0c0c] border-t border-gray-800 text-gray-500 py-4 text-center text-sm">
-    © {{ current_year }} <span class="text-[#b4ff39] font-semibold">LinkVault</span> — Built with Flask & Tailwind CSS
-  </footer>
-
 </body>
 </html>

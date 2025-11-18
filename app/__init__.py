@@ -6,7 +6,6 @@ from flask_login import LoginManager
 from config import Config
 import os
 
-# === DECLARE db & migrate FIRST ===
 db = SQLAlchemy()
 migrate = Migrate()
 bcrypt = Bcrypt()
@@ -17,10 +16,13 @@ def create_app():
     
     app.config.from_object(Config)
 
+    app.config['SECRET_KEY'] = 'your-secret-key'
+
     db.init_app(app)
     migrate.init_app(app, db)
     bcrypt.init_app(app)
     login_manager.init_app(app)
+
     
     @login_manager.user_loader
     def load_user(user_id):
@@ -41,56 +43,58 @@ def create_app():
     app.register_blueprint(user_bp, url_prefix='/api/users')
     app.register_blueprint(short_bp)
 
-    # @app.route('/')
-    # def welcome():
-    #     from flask import render_template
-    #     return render_template('landing.html'), 200
-
     # auto update tag_user_bookmark.bookmark_count
     from sqlalchemy import event
+    from app.models.bookmark import Bookmark
+    from app.models.user_bookmark import UserBookmark
+    from app.models.tag import Tag
+    from app.models.tag_user_bookmark import tag_user_bookmarks
 
-    @event.listens_for(db.session, "after_flush")
-    def update_tag_counts(session, flush_context):
-        """Update Tag.bookmark_count without triggering lazy loads during flush.
+    @event.listens_for(db.session, "after_commit")
+    def update_tag_counts(session):
+        # Cllect affected user_ids and tag_ids
+        affected_pairs = set()
 
-        Accessing relationship attributes (like `obj.tags`) can force a
-        flush while a flush is already in progress. Instead, query the
-        association table `tag_user_bookmarks` directly to collect affected
-        tag ids, then update counts using SQL expressions.
-        """
-        tag_ids_to_update = set()
-
-        # Collect bookmark IDs from session changes
-        bookmark_ids = set()
-        for obj in session.new | session.dirty | session.deleted:
+        for obj in session.new.union(session.dirty).union(session.deleted):
+            # bookmark modified → check its tag associations + all users who saved it
             if isinstance(obj, Bookmark):
-                if obj.id is not None:
-                    bookmark_ids.add(obj.id)
+                # all users who saved this bookmark
+                users = obj.user_bookmarks.all()
+                tags = obj.tags.all()
+                for ub in users:
+                    for t in tags:
+                        affected_pairs.add((ub.user_id, t.id))
 
-        if not bookmark_ids:
+            # userBookmark created/updated/deleted
+            elif isinstance(obj, UserBookmark):
+                # bookmark may have tags
+                tags = obj.bookmark.tags.all()
+                for t in tags:
+                    affected_pairs.add((obj.user_id, t.id))
+
+        # no updates needed
+        if not affected_pairs:
             return
 
-        # Find tag ids related to these bookmarks from the association table
-        rows = session.execute(
-            db.select(tag_user_bookmarks.c.tag_id)
-            .where(tag_user_bookmarks.c.bookmark_id.in_(bookmark_ids))
-        ).scalars().all()
-
-        tag_ids_to_update.update(rows)
-
-        # Update counts for each affected tag
-        for tag_id in tag_ids_to_update:
-            count = session.scalar(
+        # recalc bookmark_count for each (user, tag)
+        for (user_id, tag_id) in affected_pairs:
+            count = session.execute(
                 db.select(db.func.count())
                 .select_from(tag_user_bookmarks)
+                .where(tag_user_bookmarks.c.user_id == user_id)
                 .where(tag_user_bookmarks.c.tag_id == tag_id)
-            )
+            ).scalar()
+
+            # update all rows for this (user_id, tag_id)
             session.execute(
-                db.update(Tag)
-                .where(Tag.id == tag_id)
+                db.update(tag_user_bookmarks)
+                .where(tag_user_bookmarks.c.user_id == user_id)
+                .where(tag_user_bookmarks.c.tag_id == tag_id)
                 .values(bookmark_count=count)
             )
- # ✅ Added below lines for authentication support
+
+        session.commit()
+
     from app.auth.auth import auth  # added auth blueprint import
     app.register_blueprint(auth, url_prefix='/auth')  # registered auth blueprint
     app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")  # added secret key for sessions
@@ -101,6 +105,11 @@ def create_app():
         return 'https://' + url
     app.jinja_env.globals.update(http_url=http_url)
 
-    
+    def short_http_url(url):
+        if url.startswith('http://') or url.startswith('https://'):
+            return url
+        return 'http://127.0.0.1:5000/' + url
+    app.jinja_env.globals.update(short_http_url=short_http_url)
+
 
     return app
