@@ -1,0 +1,124 @@
+name: LinkVault CI/CD
+
+on:
+  push:
+    branches: ["production"]
+  workflow_dispatch:
+
+env:
+  APP_DIR: /home/ubuntu/LINKVAULTAPI
+  REMOTE_TEMP: /home/ubuntu/LINKVAULTAPI_TEMP
+
+jobs:
+  test-api:
+    name: Run API tests (local in runner)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Start Flask app in background
+        run: |
+          # run.py starts your Flask app (ensure it binds to 127.0.0.1:5000)
+          python run.py & 
+          export APP_PID=$!
+          # wait a bit for the server to start
+          sleep 6
+          ps -ef | grep python
+
+      - name: Run API tests
+        run: |
+          chmod +x test_api.sh
+          ./test_api.sh
+
+      - name: Kill background server
+        if: always()
+        run: |
+          kill $APP_PID || true
+
+  deploy-ec2:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: test-api
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Upload repository to EC2 (scp)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          source: "."
+          target: "${{ env.REMOTE_TEMP }}"
+
+      - name: SSH and deploy on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo "Stopping previous temp dir and moving new code"
+            rm -rf $APP_DIR || true
+            mv $REMOTE_TEMP $APP_DIR
+            cd $APP_DIR
+
+            # ensure venv exists (if you created venv inside project)
+            if [ ! -d "$APP_DIR/venv" ]; then
+              python3 -m venv venv
+            fi
+
+            source venv/bin/activate
+
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+            # Optional: set FLASK_APP for alembic/flask db (if needed)
+            export FLASK_APP=run.py
+            # Run DB migrations if you use Alembic
+            if command -v flask >/dev/null 2>&1; then
+              flask db upgrade || echo "migrations failed (continuing)"
+            fi
+
+            # restart system services
+            sudo systemctl restart linkvault
+            sudo systemctl restart nginx
+
+            echo "Deployment finished."
+
+  verify-ec2:
+    name: Verify EC2 deployment
+    runs-on: ubuntu-latest
+    needs: deploy-ec2
+
+    steps:
+      - name: SSH and run health checks
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd $APP_DIR
+            chmod +x test_autoupdate.sh
+            ./test_autoupdate.sh
